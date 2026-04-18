@@ -1,0 +1,95 @@
+# CLAUDE.md — Python SDK (client-python)
+
+## Project Purpose
+
+The `trulayer` Python package. Provides trace capture, span instrumentation, and auto-instrumentation hooks for OpenAI, Anthropic, and LangChain. Designed for minimal latency overhead and easy integration.
+
+## Tech Stack
+
+- Python 3.11+
+- `httpx` — async HTTP client for sending batches to the ingestion API
+- `pydantic` v2 — data validation and serialization
+- `uv` — package and environment management
+- `pytest` + `pytest-asyncio` — testing
+- `ruff` — lint and format
+- `mypy` — static type checking
+
+## Key Commands
+
+```bash
+uv sync --dev               # Install all dependencies including dev
+uv run pytest               # Run tests
+uv run pytest --cov         # Tests with coverage (target: >90%)
+uv run pytest -x            # Stop on first failure
+uv run ruff check .         # Lint
+uv run ruff format .        # Format
+uv run mypy .               # Type check
+uv build                    # Build sdist + wheel
+```
+
+## Project Layout
+
+```text
+src/trulayer/
+  __init__.py           → public API exports + init()
+  client.py             → TruLayerClient (init, flush, shutdown)
+  trace.py              → Trace and Span context managers
+  batch.py              → async batch sender (queue + flush loop)
+  model.py              → Pydantic models (TraceData, SpanData, etc.)
+  instruments/
+    openai.py           → OpenAI auto-instrumentation patch
+    anthropic.py        → Anthropic auto-instrumentation patch
+    langchain.py        → LangChain callback handler
+tests/
+  unit/                 → pytest unit tests (no network)
+  integration/          → tests against a real/mock TruLayer API
+```
+
+## Coding Conventions
+
+- Type annotations on all functions — `mypy --strict` must pass
+- `async` for all I/O in the batch sender; sync public API wraps async via an internal event loop thread
+- Context managers for traces (`with trulayer.trace(...)`) and spans (`with trace.span(...)`)
+- Thread-safe batch queue using `asyncio.Queue` (producer: any thread; consumer: dedicated loop thread)
+- Graceful shutdown: `atexit` handler flushes remaining batches
+- Never raise exceptions from SDK code into user code — catch internally, log with `warnings.warn`
+- Do not log user data (prompt/response content) at default log levels — only at `DEBUG`
+
+## Batch Sender Behavior
+
+- Events are queued and flushed every `flush_interval` seconds (default: 2s) or when `batch_size` is reached (default: 50)
+- On shutdown, flush is attempted with a 5s timeout
+- HTTP failures retry up to 3 times with exponential backoff
+- After max retries, events are dropped with a warning (never block user code)
+
+## ID Generation
+
+All `trace_id` and `span_id` values are **UUIDv7**, generated via the `uuid` package:
+
+```python
+import uuid
+trace_id = str(uuid.uuid7())  # requires Python 3.14+ or the `uuid7` backport package
+```
+
+## Auto-Instrumentation
+
+Patching strategy: monkey-patch the provider client's internal completion method to wrap calls in a span. Patches must be reversible (`unpatch()`). Never modify user's client instance globally without their opt-in.
+
+## Testing
+
+- Unit tests mock `httpx.AsyncClient` — no real network calls
+- Test trace/span context managers, batching logic, retry behavior
+- Integration tests in `tests/integration/` against a local mock server
+- Coverage target: **90%** (SDK reliability requires high coverage)
+- All async tests use `pytest-asyncio` with `asyncio_mode = "auto"`
+
+## Publishing
+
+- Package name: `trulayer`
+- Built with `uv build` → publishes to PyPI via CI
+- Version follows semver — bump in `pyproject.toml`
+
+## Linear References
+
+- [TRU-8](https://linear.app/omnimoda/issue/TRU-8) SDK Design
+- [TRU-15](https://linear.app/omnimoda/issue/TRU-15) Python SDK Implementation
