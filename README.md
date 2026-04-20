@@ -33,9 +33,14 @@ with trulayer.trace(name="my-agent", session_id="user-123"):
 ```python
 import trulayer
 
-trulayer.init(api_key="tl_...", project="my-project")
+trulayer.init(api_key="tl_...", project_name="my-project")
 
-with trulayer.trace(name="rag-pipeline") as trace:
+with trulayer.trace(
+    name="rag-pipeline",
+    external_id="req-42",  # link to your own request id for idempotent ingest
+) as trace:
+    trace.set_model("gpt-4o")  # rolled-up model for the trace
+
     with trace.span(name="retrieve", type="retrieval") as span:
         docs = retrieve(query)
         span.set_output({"count": len(docs)})
@@ -44,6 +49,9 @@ with trulayer.trace(name="rag-pipeline") as trace:
         result = llm.complete(prompt)
         span.set_output(result)
         span.set_metadata({"model": "gpt-4o", "tokens": 512})
+
+    trace.set_cost(0.0042)  # optional rolled-up cost in USD
+    # latency_ms is auto-derived from start to end of the trace block
 ```
 
 ## Auto-Instrumentation
@@ -72,8 +80,7 @@ async with trulayer.atrace(name="async-agent") as trace:
 ```python
 trulayer.init(
     api_key="tl_...",
-    project="my-project",           # Project name
-    environment="production",        # Environment tag
+    project_name="my-project",
     endpoint="https://api.trulayer.ai",
     batch_size=50,                   # Events per batch
     flush_interval=2.0,              # Seconds between flushes
