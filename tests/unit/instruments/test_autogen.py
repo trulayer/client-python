@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -53,7 +53,7 @@ def _make_client() -> MagicMock:
 
 def _get_spans(client: MagicMock) -> list[dict[str, Any]]:
     payload = client._batch.enqueue.call_args[0][0]
-    return payload["spans"]
+    return cast(list[dict[str, Any]], payload["spans"])
 
 
 # ---------------------------------------------------------------------------

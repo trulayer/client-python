@@ -82,7 +82,7 @@ def test_uninstrument_is_idempotent() -> None:
 def test_instrument_openai_no_openai_installed() -> None:
     """When openai is not installed, instrument_openai warns and returns gracefully."""
     client = _make_client()
-    with patch.dict(sys.modules, {"openai": None}):  # type: ignore[dict-item]
+    with patch.dict(sys.modules, {"openai": None}):
         import warnings
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")

@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from trulayer.client import TruLayerClient
 from trulayer.instruments.anthropic import instrument_anthropic, uninstrument_anthropic
-from trulayer.instruments.langchain import instrument_langchain
-from trulayer.instruments.openai import instrument_openai, uninstrument_openai
 from trulayer.instruments.autogen import instrument_autogen
 from trulayer.instruments.crewai import instrument_crewai
 from trulayer.instruments.dspy import instrument_dspy, uninstrument_dspy
 from trulayer.instruments.haystack import instrument_haystack
+from trulayer.instruments.langchain import instrument_langchain
+from trulayer.instruments.openai import instrument_openai, uninstrument_openai
 from trulayer.instruments.pydanticai import instrument_pydanticai
 from trulayer.local_batch import LocalBatchSender
 from trulayer.model import EventData, FeedbackData, SpanData, TraceData

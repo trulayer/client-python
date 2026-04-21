@@ -68,7 +68,7 @@ def test_uninstrument_is_idempotent() -> None:
 
 def test_instrument_anthropic_no_package_installed() -> None:
     client = _make_client()
-    with patch.dict(sys.modules, {"anthropic": None}):  # type: ignore[dict-item]
+    with patch.dict(sys.modules, {"anthropic": None}):
         import warnings
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
