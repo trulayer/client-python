@@ -211,18 +211,14 @@ class Redactor:
         self._rules: list[Rule] = []
         for pack in packs or []:
             if pack not in BUILTIN_PACKS:
-                raise ValueError(
-                    f"unknown pack '{pack}'; available: {sorted(BUILTIN_PACKS)}"
-                )
+                raise ValueError(f"unknown pack '{pack}'; available: {sorted(BUILTIN_PACKS)}")
             for name, pat, validator in BUILTIN_PACKS[pack]:
                 self._rules.append(Rule(name=name, pattern=pat, validator=validator))
         for rule in rules or []:
             self._rules.append(rule)
 
         if self._needs_salt() and self._salt is None:
-            raise ValueError(
-                "pseudonymize=True requires pseudonymize_salt to be provided"
-            )
+            raise ValueError("pseudonymize=True requires pseudonymize_salt to be provided")
 
     # ------------------------------------------------------------------
     # Public API
@@ -235,8 +231,10 @@ class Redactor:
         out = text
         for rule in self._rules:
             current_rule = rule  # capture for closure
+
             def _sub(m: re.Match[str], _r: Rule = current_rule) -> str:
                 return self._replacement_for(_r, m.group(0))
+
             out = current_rule._compiled.sub(_sub, out)  # noqa: SLF001
         return out
 

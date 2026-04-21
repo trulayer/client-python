@@ -15,9 +15,7 @@ from trulayer.redact import BUILTIN_PACKS, Redactor, Rule, redact
 
 def test_standard_pack_catches_email() -> None:
     r = Redactor(packs=["standard"])
-    assert r.redact("contact foo.bar+baz@example.co.uk today") == (
-        "contact <REDACTED:email> today"
-    )
+    assert r.redact("contact foo.bar+baz@example.co.uk today") == ("contact <REDACTED:email> today")
 
 
 def test_standard_pack_catches_ssn() -> None:
@@ -100,11 +98,7 @@ def test_secrets_pack_catches_github_pat() -> None:
 
 def test_secrets_pack_catches_pem_block() -> None:
     r = Redactor(packs=["secrets"])
-    pem = (
-        "-----BEGIN RSA PRIVATE KEY-----\n"
-        "MIIBOgIBAAJBALZF1x\n"
-        "-----END RSA PRIVATE KEY-----"
-    )
+    pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBALZF1x\n-----END RSA PRIVATE KEY-----"
     out = r.redact(f"key:\n{pem}\nend")
     assert "<REDACTED:pem_private_key>" in out
     assert "MIIBOgIBAAJBALZF1x" not in out
