@@ -19,9 +19,10 @@ The `trulayer` Python package. Provides trace capture, span instrumentation, and
 A task is **not done** until all of the following are true — in order:
 
 1. **Tests pass** — `uv run pytest` green, `uv run mypy src/`, `uv run ruff check` zero errors.
-2. **Committed on a feature branch** — all changed files committed on a branch named `feat/...` or `fix/...`. **Never commit directly to `main`.**
-3. **PR opened** — `gh pr create` targeting `main` with a summary of what changed and why.
-4. **PR merged** — `gh pr merge --squash`. Work on the next task cannot begin until this PR is merged.
+2. **Docs updated** — **Documentation is part of Done.** Any PR that changes public SDK exports must include the corresponding update to the public docs in the same PR. "I'll update docs in a follow-up" is not acceptable. If the docs change is too big to ship with the code, split the code change first.
+3. **Committed on a feature branch** — all changed files committed on a branch named `feat/...` or `fix/...`. **Never commit directly to `main`.**
+4. **PR opened** — `gh pr create` targeting `main` with a summary of what changed and why.
+5. **PR merged** — `gh pr merge --squash`. Work on the next task cannot begin until this PR is merged.
 5. **Working tree clean** — after merge, `git status` must show nothing to commit. No uncommitted modifications, no untracked feature files. If something is still local, commit it or delete it — leaving code in a branch without a PR is the same as it not existing.
 
 **Direct pushes to `main` are forbidden.** Every change must go through a pull request.
