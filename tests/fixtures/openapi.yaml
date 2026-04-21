@@ -415,7 +415,9 @@ components:
         model: { type: string, nullable: true }
         latency_ms: { type: integer, nullable: true }
         cost: { type: number, nullable: true }
-        error: { type: string, nullable: true }
+        error: { type: boolean }
+        started_at: { type: string, format: date-time, nullable: true }
+        ended_at: { type: string, format: date-time, nullable: true }
         metadata: { type: object, additionalProperties: true }
         spans:
           type: array
