@@ -14,6 +14,12 @@ dependencies = [
 openai = ["openai>=1.0.0"]
 anthropic = ["anthropic>=0.36.0"]
 langchain = ["langchain-core>=0.2.0"]
+llamaindex = ["llama-index-core>=0.10.0"]
+pydantic-ai = ["pydantic-ai>=0.0.14"]
+crewai = ["crewai>=0.30.0"]
+dspy = ["dspy-ai>=2.4.0"]
+haystack = ["haystack-ai>=2.0.0"]
+autogen = ["pyautogen>=0.2.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -30,6 +36,8 @@ dev-dependencies = [
     "ruff>=0.5.0",
     "mypy>=1.10.0",
     "respx>=0.21.0",
+    "openapi-spec-validator>=0.7.0",
+    "pyyaml>=6.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -50,7 +58,7 @@ python_version = "3.11"
 files = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["openai.*", "anthropic.*", "langchain.*", "langchain_core.*", "uuid7"]
+module = ["openai.*", "anthropic.*", "langchain.*", "langchain_core.*", "llama_index.*", "pydantic_ai.*", "uuid7", "crewai.*", "dspy.*", "haystack.*", "autogen.*", "pyautogen.*"]
 ignore_missing_imports = true
 
 [tool.coverage.report]

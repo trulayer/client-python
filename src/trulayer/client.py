@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import os
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -19,18 +20,21 @@ class TruLayerClient:
     Main SDK client. Initialize once per process.
 
     Usage:
-        tl = TruLayerClient(api_key="tl_...", project_id="proj_...")
+        tl = TruLayerClient(api_key="tl_...", project_name="proj_...")
         with tl.trace("my-operation") as t:
             t.set_input("hello")
             with t.span("llm-call") as span:
                 result = openai.chat.completions.create(...)
                 span.set_output(result.choices[0].message.content)
             t.set_output("world")
+
+    Set ``TRULAYER_MODE=local`` to capture traces in-memory without sending
+    them to the API (no API key required).  Useful for CI and offline testing.
     """
 
     def __init__(
         self,
-        api_key: str,
+        api_key: str = "",
         project_name: str | None = None,
         endpoint: str = _DEFAULT_ENDPOINT,
         batch_size: int = 50,
@@ -39,12 +43,19 @@ class TruLayerClient:
         scrub_fn: Callable[[str], str] | None = None,
         metadata_validator: Callable[[dict[str, Any]], None] | None = None,
         project_id: str | None = None,  # deprecated alias
+        _sender: Any = None,
     ) -> None:
         if not 0.0 <= sample_rate <= 1.0:
             raise ValueError(f"sample_rate must be between 0.0 and 1.0, got {sample_rate}")
+
+        local_mode = _sender is not None or os.environ.get("TRULAYER_MODE") == "local"
+
         name = project_name or project_id
         if not name:
-            raise TypeError("trulayer: project_name is required")
+            if local_mode:
+                name = "local"
+            else:
+                raise TypeError("trulayer: project_name is required")
         if project_id and not project_name:
             warnings.warn(
                 "trulayer: `project_id` is deprecated; rename to `project_name`. "
@@ -62,12 +73,24 @@ class TruLayerClient:
         self._sample_rate = sample_rate
         self._scrub_fn = scrub_fn
         self._metadata_validator = metadata_validator
-        self._batch = BatchSender(
-            api_key=api_key,
-            endpoint=endpoint,
-            batch_size=batch_size,
-            flush_interval=flush_interval,
-        )
+
+        if _sender is not None:
+            self._batch = _sender
+        elif os.environ.get("TRULAYER_MODE") == "local":
+            from trulayer.local_batch import LocalBatchSender  # noqa: PLC0415
+
+            self._batch = LocalBatchSender()
+            warnings.warn(
+                "[trulayer] running in LOCAL mode — no data will be sent to the API",
+                stacklevel=2,
+            )
+        else:
+            self._batch = BatchSender(
+                api_key=api_key,
+                endpoint=endpoint,
+                batch_size=batch_size,
+                flush_interval=flush_interval,
+            )
         self._batch.start()
         atexit.register(self.shutdown)
 

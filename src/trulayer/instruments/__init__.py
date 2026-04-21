@@ -7,3 +7,6 @@ __all__ = [
     "instrument_anthropic",
     "uninstrument_anthropic",
 ]
+
+# LlamaIndex handler is intentionally not imported here because llama_index
+# is an optional dependency and the module raises ImportError at load time.

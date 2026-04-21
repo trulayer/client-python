@@ -15,7 +15,7 @@ Generate a Pydantic v2 model following these rules:
 - All timestamps are `datetime` with `default_factory=datetime.utcnow`
 - Optional fields use `field: SomeType | None = None`
 - Use `model_config = ConfigDict(extra="ignore")` so forward-compatible with new server fields
-- Serializes to JSON via `.model_dump(mode="json")` — confirm field names match the Go backend's JSON tags
+- Serializes to JSON via `.model_dump(mode="json")` — confirm field names match the TruLayer API JSON field names
 
 Example shape:
 ```python
@@ -37,4 +37,4 @@ class <name>(BaseModel):
 After generating:
 1. Export the new model from `src/trulayer/__init__.py` if it's part of the public API.
 2. Add a unit test in `tests/unit/test_model.py` verifying serialization round-trips correctly.
-3. Cross-check field names against the Go backend's JSON tags in `backend/internal/model/`.
+3. Cross-check field names against the TruLayer OpenAPI spec in `tests/fixtures/openapi.yaml`.

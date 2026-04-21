@@ -1,5 +1,7 @@
 # Python SDK — Implementation Tasks
 
+**Due Date: 2026-04-30**
+
 Track implementation progress for the TruLayer AI Python SDK.
 
 ## Status Legend
@@ -10,7 +12,7 @@ Track implementation progress for the TruLayer AI Python SDK.
 
 ---
 
-## Phase 1: Core SDK — [TRU-15](https://linear.app/omnimoda/issue/TRU-15)
+## Phase 1: Core SDK
 
 ### Project Setup
 
@@ -20,7 +22,7 @@ Track implementation progress for the TruLayer AI Python SDK.
 - [x] Configure CI: lint, type-check, test with coverage gate (>90%)
 - [x] Set up `src/trulayer/` layout
 
-### Core Models — [TRU-8](https://linear.app/omnimoda/issue/TRU-8)
+### Core Models
 
 - [x] `TraceData` Pydantic model (id, project, session, metadata, spans)
 - [x] `SpanData` Pydantic model (id, trace_id, type, input, output, metadata, timing)
@@ -64,11 +66,17 @@ Track implementation progress for the TruLayer AI Python SDK.
 
 ## Phase 2: V1 Enhancements
 
-- [ ] `instrument_llamaindex()` — LlamaIndex integration
+- [x] **`instrument_llamaindex()` — LlamaIndex integration** ← top priority
+- [x] **`instrument_pydanticai()` — PydanticAI Agent instrumentation** (TRU-80)
 - [x] Streaming support: sync + async generator wrappers for OpenAI and Anthropic (`stream=True`)
 - [x] Sampling rate configuration (e.g., only send 10% of traces)
 - [x] PII scrubbing / redaction hooks (user-provided callable)
 - [x] Custom metadata schema validation
+- [x] **Local/offline sandbox mode** (`TRULAYER_MODE=local`, `LocalBatchSender`, `create_test_client`, `assert_sender`) (TRU-81)
+- [x] **`instrument_crewai()` — CrewAI Crew instrumentation** (TRU-85)
+- [x] **`instrument_dspy()` / `uninstrument_dspy()` — DSPy Predict instrumentation** (TRU-85)
+- [x] **`instrument_haystack()` — Haystack v2 Pipeline instrumentation** (TRU-85)
+- [x] **`instrument_autogen()` — AutoGen ConversableAgent instrumentation** (TRU-85)
 
 ---
 

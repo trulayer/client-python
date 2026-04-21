@@ -14,6 +14,17 @@ The `trulayer` Python package. Provides trace capture, span instrumentation, and
 - `ruff` — lint and format
 - `mypy` — static type checking
 
+## Definition of Done
+
+A task is **not done** until all of the following are true — in order:
+
+1. **Tests pass** — `uv run pytest` green, `uv run mypy src/`, `uv run ruff check` zero errors.
+2. **Committed** — all changed files committed on a feature branch with a descriptive message.
+3. **PR opened** — `gh pr create` targeting `main` with a summary of what changed and why.
+4. **PR merged** — `gh pr merge --squash`. The branch is merged into `main` before work on the next task begins.
+
+"I'll open the PR later" is never acceptable.
+
 ## Key Commands
 
 ```bash
@@ -89,7 +100,6 @@ Patching strategy: monkey-patch the provider client's internal completion method
 - Built with `uv build` → publishes to PyPI via CI
 - Version follows semver — bump in `pyproject.toml`
 
-## Linear References
+## Public Repository Policy
 
-- [TRU-8](https://linear.app/omnimoda/issue/TRU-8) SDK Design
-- [TRU-15](https://linear.app/omnimoda/issue/TRU-15) Python SDK Implementation
+This repository ships to TruLayer customers. Do not introduce references to internal code, internal repositories (e.g. the TruLayer API service or dashboard), internal planning documents, internal Linear issue content, or internal architectural details. Refer to the platform as "TruLayer" or "the TruLayer API" — not as specific internal components. If in doubt, leave it out.
