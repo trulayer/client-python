@@ -22,6 +22,7 @@ A task is **not done** until all of the following are true — in order:
 2. **Committed on a feature branch** — all changed files committed on a branch named `feat/...` or `fix/...`. **Never commit directly to `main`.**
 3. **PR opened** — `gh pr create` targeting `main` with a summary of what changed and why.
 4. **PR merged** — `gh pr merge --squash`. Work on the next task cannot begin until this PR is merged.
+5. **Working tree clean** — after merge, `git status` must show nothing to commit. No uncommitted modifications, no untracked feature files. If something is still local, commit it or delete it — leaving code in a branch without a PR is the same as it not existing.
 
 **Direct pushes to `main` are forbidden.** Every change must go through a pull request.
 
