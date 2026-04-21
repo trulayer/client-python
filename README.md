@@ -108,7 +108,7 @@ uv run ruff format .             # Format
 uv run mypy .                    # Type check
 ```
 
-## Linear Issues
+## Links
 
-- [TRU-8](https://linear.app/omnimoda/issue/TRU-8) — SDK Design
-- [TRU-15](https://linear.app/omnimoda/issue/TRU-15) — Python SDK Implementation
+- [Documentation](https://docs.trulayer.ai)
+- [API Reference](https://docs.trulayer.ai/api-reference)
