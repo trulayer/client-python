@@ -107,6 +107,7 @@ def test_init_passes_scrub_fn() -> None:
 
 def test_init_accepts_deprecated_project_id_alias() -> None:
     import warnings
+
     import trulayer
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -118,6 +119,7 @@ def test_init_accepts_deprecated_project_id_alias() -> None:
 
 def test_init_requires_project_name() -> None:
     import pytest
+
     import trulayer
     with pytest.raises(TypeError, match="project_name"):
         trulayer.TruLayerClient(api_key="tl_t")

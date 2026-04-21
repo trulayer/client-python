@@ -10,7 +10,6 @@ from unittest.mock import MagicMock
 from trulayer.instruments.dspy import instrument_dspy, uninstrument_dspy
 from trulayer.trace import TraceContext
 
-
 # ---------------------------------------------------------------------------
 # Fake dspy module injected into sys.modules for testing
 # ---------------------------------------------------------------------------
@@ -23,7 +22,8 @@ def _make_fake_dspy() -> types.ModuleType:
         def forward(self, **kwargs: Any) -> dict[str, Any]:
             return {"answer": "42"}
 
-    mod.Predict = Predict    return mod
+    mod.Predict = Predict  # type: ignore[attr-defined]
+    return mod
 
 
 def _install_fake_dspy() -> types.ModuleType:
@@ -65,9 +65,12 @@ def test_instrument_patches_forward() -> None:
     mod = _install_fake_dspy()
     try:
         client = _make_client()
-        original = mod.Predict.forward        with TraceContext(client, name="trace") as ctx:
+        original = mod.Predict.forward
+        with TraceContext(client, name="trace") as ctx:
             instrument_dspy(ctx)
-        assert mod.Predict.forward is not original        assert getattr(mod.Predict, "_tl_patched", False) is True    finally:
+        assert mod.Predict.forward is not original
+        assert getattr(mod.Predict, "_tl_patched", False) is True
+    finally:
         uninstrument_dspy()
         _cleanup_fake_dspy()
 
@@ -83,7 +86,8 @@ def test_forward_creates_span_with_input() -> None:
         client = _make_client()
         with TraceContext(client, name="trace") as ctx:
             instrument_dspy(ctx)
-            p = mod.Predict()            result = p.forward(question="What is 6*7?")
+            p = mod.Predict()
+            result = p.forward(question="What is 6*7?")
 
         assert result == {"answer": "42"}
         spans = _get_spans(client)
@@ -107,7 +111,8 @@ def test_forward_records_output() -> None:
         client = _make_client()
         with TraceContext(client, name="trace") as ctx:
             instrument_dspy(ctx)
-            p = mod.Predict()            p.forward(question="test")
+            p = mod.Predict()
+            p.forward(question="test")
 
         spans = _get_spans(client)
         llm_spans = [s for s in spans if s["span_type"] == "llm"]
@@ -126,11 +131,15 @@ def test_forward_records_output() -> None:
 def test_uninstrument_restores_original() -> None:
     mod = _install_fake_dspy()
     try:
-        original = mod.Predict.forward        client = _make_client()
+        original = mod.Predict.forward
+        client = _make_client()
         with TraceContext(client, name="trace") as ctx:
             instrument_dspy(ctx)
-        assert mod.Predict.forward is not original        uninstrument_dspy()
-        assert mod.Predict.forward is original        assert getattr(mod.Predict, "_tl_patched", True) is False    finally:
+        assert mod.Predict.forward is not original
+        uninstrument_dspy()
+        assert mod.Predict.forward is original
+        assert getattr(mod.Predict, "_tl_patched", True) is False
+    finally:
         _cleanup_fake_dspy()
 
 
@@ -145,8 +154,10 @@ def test_double_instrument_is_idempotent() -> None:
         client = _make_client()
         with TraceContext(client, name="trace") as ctx:
             instrument_dspy(ctx)
-            first_patched = mod.Predict.forward            instrument_dspy(ctx)
-            second_patched = mod.Predict.forward        assert first_patched is second_patched
+            first_patched = mod.Predict.forward
+            instrument_dspy(ctx)
+            second_patched = mod.Predict.forward
+        assert first_patched is second_patched
     finally:
         uninstrument_dspy()
         _cleanup_fake_dspy()

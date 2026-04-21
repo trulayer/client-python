@@ -282,9 +282,8 @@ def test_metadata_validator_applied_on_enqueue() -> None:
 
     with _w.catch_warnings(record=True) as caught:
         _w.simplefilter("always")
-        with TraceContext(client, name="t", metadata={"bad": "data"}) as t:
-            with t.span("s") as span:
-                span.set_metadata(env="prod")
+        with TraceContext(client, name="t", metadata={"bad": "data"}) as t, t.span("s") as span:
+            span.set_metadata(env="prod")
 
     payload = client._batch.enqueue.call_args[0][0]
     assert payload["metadata"] == {}

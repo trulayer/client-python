@@ -10,7 +10,6 @@ import pytest
 from trulayer.instruments.pydanticai import instrument_pydanticai
 from trulayer.trace import TraceContext
 
-
 # ---------------------------------------------------------------------------
 # Mock PydanticAI types
 # ---------------------------------------------------------------------------
@@ -253,10 +252,12 @@ async def test_exception_propagates() -> None:
             raise ValueError("model exploded")
 
     agent = FailingAgent()
-    with pytest.raises(ValueError, match="model exploded"):
-        with TraceContext(client, name="trace") as ctx:
-            instrument_pydanticai(agent, ctx)
-            await agent.run("prompt")
+    with (
+        pytest.raises(ValueError, match="model exploded"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_pydanticai(agent, ctx)
+        await agent.run("prompt")
 
     spans = _get_spans(client)
     agent_spans = [s for s in spans if s["span_type"] == "agent"]

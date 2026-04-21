@@ -34,7 +34,7 @@ def _make_anthropic_response(text: str = "hello") -> SimpleNamespace:
 
 def test_record_span_inside_trace() -> None:
     client = _make_client()
-    with TraceContext(client) as t:
+    with TraceContext(client) as _:
         result = _make_anthropic_response("response text")
         _record_span(
             client,

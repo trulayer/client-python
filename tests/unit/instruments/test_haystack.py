@@ -10,7 +10,6 @@ import pytest
 from trulayer.instruments.haystack import instrument_haystack
 from trulayer.trace import TraceContext
 
-
 # ---------------------------------------------------------------------------
 # Mock Haystack types
 # ---------------------------------------------------------------------------
@@ -162,8 +161,10 @@ def test_exception_propagates() -> None:
             raise ValueError("pipeline failed")
 
     pipeline = FailingPipeline()
-    with pytest.warns(match="error during Haystack pipeline run"):
-        with pytest.raises(ValueError, match="pipeline failed"):
-            with TraceContext(client, name="trace") as ctx:
-                instrument_haystack(pipeline, ctx)
-                pipeline.run(data={"query": "test"})
+    with (
+        pytest.warns(match="error during Haystack pipeline run"),
+        pytest.raises(ValueError, match="pipeline failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_haystack(pipeline, ctx)
+        pipeline.run(data={"query": "test"})

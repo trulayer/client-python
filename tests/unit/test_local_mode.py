@@ -8,8 +8,7 @@ from unittest import mock
 import pytest
 
 from trulayer.local_batch import LocalBatchSender
-from trulayer.testing import SenderAssertions, assert_sender, create_test_client
-
+from trulayer.testing import assert_sender, create_test_client
 
 # ---------------------------------------------------------------------------
 # LocalBatchSender unit tests
@@ -77,10 +76,9 @@ class TestCreateTestClient:
     def test_create_test_client_captures_spans(self) -> None:
         """After trace + flush, sender.spans has data."""
         client, sender = create_test_client(project_name="test-proj")
-        with client.trace("my-trace") as t:
-            with t.span("step-1", "llm") as span:
-                span.set_input("hello")
-                span.set_output("world")
+        with client.trace("my-trace") as t, t.span("step-1", "llm") as span:
+            span.set_input("hello")
+            span.set_output("world")
         client.flush()
         assert len(sender.traces) == 1
         assert len(sender.spans) == 1

@@ -42,7 +42,10 @@ def _validate_metadata(
         try:
             validator(meta)
         except Exception as exc:
-            _warnings.warn(f"trulayer: metadata validation failed, clearing metadata: {exc}", stacklevel=2)
+            _warnings.warn(
+                f"trulayer: metadata validation failed, clearing metadata: {exc}",
+                stacklevel=2,
+            )
             item["metadata"] = {}
     return payload
 
@@ -98,7 +101,9 @@ class SpanContext:
         self._data.ended_at = _now()
         if exc_type is not None:
             self._data.error = True
-            self._data.error_message = "".join(traceback.format_exception(exc_type, exc_val, exc_tb))
+            self._data.error_message = "".join(
+                traceback.format_exception(exc_type, exc_val, exc_tb)
+            )
         self._trace._data.spans.append(self._data)
 
     async def __aenter__(self) -> SpanContext:

@@ -10,7 +10,6 @@ import pytest
 from trulayer.instruments.crewai import instrument_crewai
 from trulayer.trace import TraceContext
 
-
 # ---------------------------------------------------------------------------
 # Mock CrewAI types
 # ---------------------------------------------------------------------------
@@ -159,11 +158,13 @@ def test_exception_from_kickoff_reraises() -> None:
             raise RuntimeError("crew failed")
 
     crew = FailingCrew()
-    with pytest.warns(match="error during CrewAI kickoff"):
-        with pytest.raises(RuntimeError, match="crew failed"):
-            with TraceContext(client, name="trace") as ctx:
-                instrument_crewai(crew, ctx)
-                crew.kickoff()
+    with (
+        pytest.warns(match="error during CrewAI kickoff"),
+        pytest.raises(RuntimeError, match="crew failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_crewai(crew, ctx)
+        crew.kickoff()
 
 
 # ---------------------------------------------------------------------------

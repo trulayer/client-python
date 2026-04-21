@@ -35,7 +35,7 @@ def _make_openai_response(content: str = "hello", model: str = "gpt-4o") -> Simp
 
 def test_record_span_inside_trace() -> None:
     client = _make_client()
-    with TraceContext(client, name="test") as t:
+    with TraceContext(client, name="test") as _:
         result = _make_openai_response("world")
         _record_span(client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, result, 0.1)
 
@@ -60,7 +60,9 @@ def test_record_span_malformed_result_still_records() -> None:
             raise AttributeError("no choices")
 
     with TraceContext(client, name="test") as _:
-        _record_span(client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, _BadResult(), 0.1)
+        _record_span(
+            client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, _BadResult(), 0.1
+        )
 
     payload = client._batch.enqueue.call_args[0][0]
     assert payload["spans"][0]["output"] == ""
@@ -237,8 +239,6 @@ async def test_instrument_openai_async_patched_function() -> None:
     client = _make_client()
 
     fake_response = _make_openai_response("async response")
-    original_async = MagicMock(return_value=fake_response)
-
     async def async_original(self: object, *args: object, **kwargs: object) -> object:
         return fake_response
 

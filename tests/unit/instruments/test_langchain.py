@@ -47,7 +47,9 @@ def _make_llm_result(
     gen = SimpleNamespace(text=text, message=None)
     return SimpleNamespace(
         generations=[[gen]],
-        llm_output={"token_usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}},
+        llm_output={
+            "token_usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
+        },
     )
 
 
@@ -254,7 +256,7 @@ def test_instrument_langchain_creates_handler() -> None:
 
 
 def test_instrument_langchain_missing_dep_warns_and_raises() -> None:
-    with pytest.raises(ImportError), warnings.catch_warnings(record=True) as w:
+    with pytest.raises(ImportError), warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         with (
             # Hide both possible import paths
