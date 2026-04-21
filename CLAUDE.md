@@ -25,6 +25,10 @@ A task is **not done** until all of the following are true — in order:
 
 **Direct pushes to `main` are forbidden.** Every change must go through a pull request.
 
+## CI is gating
+
+Every pull request must pass CI before it can be merged. If CI fails, the engineer who opened the PR owns the fix — not a reviewer, not a follow-up task. Don't merge with failing CI. Don't bypass with `--admin` or `--no-verify`. If a check is flaky, fix it or remove it — don't skip it.
+
 ## Key Commands
 
 ```bash
