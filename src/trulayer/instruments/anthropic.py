@@ -63,6 +63,7 @@ def uninstrument_anthropic() -> None:
         return
     try:
         import anthropic  # noqa: PLC0415
+
         if _original_create:
             anthropic.resources.messages.Messages.create = _original_create
         if _original_acreate:

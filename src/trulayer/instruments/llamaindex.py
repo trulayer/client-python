@@ -62,9 +62,7 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
         if payload is not None:
             if event_type == CBEventType.LLM:
                 # LlamaIndex stores messages under EventPayload.MESSAGES
-                messages = payload.get("messages") or payload.get(
-                    "template_args"
-                )
+                messages = payload.get("messages") or payload.get("template_args")
                 if messages:
                     input_text = str(messages)
             elif event_type in (CBEventType.QUERY, CBEventType.RETRIEVE):

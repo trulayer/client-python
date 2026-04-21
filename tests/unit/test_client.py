@@ -40,9 +40,7 @@ def test_feedback_success() -> None:
 
 @respx.mock
 def test_feedback_failure_warns_not_raises() -> None:
-    respx.post("https://api.trulayer.ai/v1/feedback").mock(
-        return_value=httpx.Response(500)
-    )
+    respx.post("https://api.trulayer.ai/v1/feedback").mock(return_value=httpx.Response(500))
     client = _make_client()
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -58,6 +56,7 @@ def test_global_init_and_get_client() -> None:
 
 def test_get_client_before_init_raises() -> None:
     import trulayer as tl
+
     tl._global_client = None
     with pytest.raises(RuntimeError, match="init"):
         tl.get_client()
@@ -109,6 +108,7 @@ def test_init_accepts_deprecated_project_id_alias() -> None:
     import warnings
 
     import trulayer
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         c = trulayer.TruLayerClient(api_key="tl_t", project_id="legacy")
@@ -121,5 +121,6 @@ def test_init_requires_project_name() -> None:
     import pytest
 
     import trulayer
+
     with pytest.raises(TypeError, match="project_name"):
         trulayer.TruLayerClient(api_key="tl_t")

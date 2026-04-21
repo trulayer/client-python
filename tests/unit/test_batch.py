@@ -57,11 +57,10 @@ async def test_retry_on_server_error() -> None:
 async def test_max_retries_drops_and_warns() -> None:
     sender = _make_sender()
     with respx.mock:
-        respx.post("https://api.trulayer.ai/v1/ingest/batch").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.post("https://api.trulayer.ai/v1/ingest/batch").mock(return_value=httpx.Response(500))
         with patch("trulayer.batch._RETRY_BASE_DELAY", 0.0):
             import warnings
+
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
                 await sender._send_with_retry([{"id": "trace-1"}])

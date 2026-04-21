@@ -63,6 +63,7 @@ def uninstrument_openai() -> None:
         return
     try:
         import openai  # noqa: PLC0415
+
         if _original_create:
             openai.resources.chat.completions.Completions.create = _original_create
         if _original_acreate:

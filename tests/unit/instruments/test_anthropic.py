@@ -70,6 +70,7 @@ def test_instrument_anthropic_no_package_installed() -> None:
     client = _make_client()
     with patch.dict(sys.modules, {"anthropic": None}):
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             ant_module._patched = False
@@ -107,6 +108,7 @@ def test_instrument_anthropic_patches_and_unpatches() -> None:
 # Streaming
 # ---------------------------------------------------------------------------
 
+
 def _make_content_delta_event(text: str) -> SimpleNamespace:
     return SimpleNamespace(type="content_block_delta", delta=SimpleNamespace(text=text))
 
@@ -125,12 +127,14 @@ def test_wrap_sync_stream_records_span() -> None:
     ]
 
     with TraceContext(client, name="ant-stream") as _:
-        collected = list(_wrap_sync_stream(
-            client,
-            {"model": "claude-3-haiku", "messages": [{"content": "say hi"}]},
-            iter(events),
-            0.0,
-        ))
+        collected = list(
+            _wrap_sync_stream(
+                client,
+                {"model": "claude-3-haiku", "messages": [{"content": "say hi"}]},
+                iter(events),
+                0.0,
+            )
+        )
 
     assert len(collected) == 3
     payload = client._batch.enqueue.call_args[0][0]
@@ -160,12 +164,15 @@ async def test_wrap_async_stream_records_span() -> None:
             yield e
 
     with TraceContext(client, name="ant-async") as _:
-        collected = [e async for e in _wrap_async_stream(
-            client,
-            {"model": "claude-3", "messages": [{"content": "q"}]},
-            _async_events(),
-            0.0,
-        )]
+        collected = [
+            e
+            async for e in _wrap_async_stream(
+                client,
+                {"model": "claude-3", "messages": [{"content": "q"}]},
+                _async_events(),
+                0.0,
+            )
+        ]
 
     assert len(collected) == 2
     payload = client._batch.enqueue.call_args[0][0]

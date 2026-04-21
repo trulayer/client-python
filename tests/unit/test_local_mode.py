@@ -35,17 +35,21 @@ class TestLocalBatchSender:
     def test_local_batch_sender_spans_property(self) -> None:
         """spans property returns flat spans across all traces."""
         sender = LocalBatchSender()
-        sender.enqueue({
-            "id": "t1",
-            "spans": [
-                {"name": "s1", "span_type": "llm"},
-                {"name": "s2", "span_type": "tool"},
-            ],
-        })
-        sender.enqueue({
-            "id": "t2",
-            "spans": [{"name": "s3", "span_type": "default"}],
-        })
+        sender.enqueue(
+            {
+                "id": "t1",
+                "spans": [
+                    {"name": "s1", "span_type": "llm"},
+                    {"name": "s2", "span_type": "tool"},
+                ],
+            }
+        )
+        sender.enqueue(
+            {
+                "id": "t2",
+                "spans": [{"name": "s3", "span_type": "default"}],
+            }
+        )
         assert len(sender.spans) == 3
         assert [s["name"] for s in sender.spans] == ["s1", "s2", "s3"]
 

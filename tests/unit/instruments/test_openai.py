@@ -86,6 +86,7 @@ def test_instrument_openai_no_openai_installed() -> None:
     client = _make_client()
     with patch.dict(sys.modules, {"openai": None}):
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             oai_module._patched = False
@@ -130,6 +131,7 @@ def test_instrument_openai_patches_and_unpatches() -> None:
 # ---------------------------------------------------------------------------
 # Streaming
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(text: str | None = "hello", usage: object | None = None) -> SimpleNamespace:
     delta = SimpleNamespace(content=text)
@@ -190,12 +192,15 @@ async def test_wrap_async_stream_records_span() -> None:
             yield c
 
     with TraceContext(client, name="async-stream") as _:
-        collected = [chunk async for chunk in _wrap_async_stream(
-            client,
-            {"model": "gpt-4o", "messages": [{"content": "question"}]},
-            _async_chunks(),
-            0.0,
-        )]
+        collected = [
+            chunk
+            async for chunk in _wrap_async_stream(
+                client,
+                {"model": "gpt-4o", "messages": [{"content": "question"}]},
+                _async_chunks(),
+                0.0,
+            )
+        ]
 
     assert len(collected) == 2
     payload = client._batch.enqueue.call_args[0][0]
@@ -206,6 +211,7 @@ async def test_wrap_async_stream_records_span() -> None:
 def test_wrap_sync_stream_exception_warns_and_records_partial() -> None:
     """Stream errors are caught, warned about, and partial output is recorded."""
     import warnings as _warnings
+
     client = _make_client()
 
     def _bad_stream() -> object:
@@ -239,6 +245,7 @@ async def test_instrument_openai_async_patched_function() -> None:
     client = _make_client()
 
     fake_response = _make_openai_response("async response")
+
     async def async_original(self: object, *args: object, **kwargs: object) -> object:
         return fake_response
 

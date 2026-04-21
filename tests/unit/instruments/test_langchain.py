@@ -1,4 +1,5 @@
 """Tests for the LangChain callback handler."""
+
 from __future__ import annotations
 
 import sys
@@ -66,6 +67,7 @@ def _make_chat_llm_result(text: str = "chat answer") -> Any:
 # _extract_model
 # ---------------------------------------------------------------------------
 
+
 def test_extract_model_from_serialized_model_name() -> None:
     serialized = {"kwargs": {"model_name": "gpt-4o"}}
     assert _extract_model(serialized, {}) == "gpt-4o"
@@ -88,6 +90,7 @@ def test_extract_model_empty() -> None:
 # ---------------------------------------------------------------------------
 # _extract_chat_input
 # ---------------------------------------------------------------------------
+
 
 def test_extract_chat_input_string_content() -> None:
     msg = SimpleNamespace(content="hello from user")
@@ -113,12 +116,14 @@ def test_extract_chat_input_exception_returns_empty() -> None:
         @property
         def content(self) -> str:
             raise RuntimeError("boom")
+
     assert _extract_chat_input([[_Boom()]]) == ""
 
 
 # ---------------------------------------------------------------------------
 # on_llm_start / on_llm_end lifecycle
 # ---------------------------------------------------------------------------
+
 
 def test_on_llm_start_stores_entry() -> None:
     h = _make_handler()
@@ -200,6 +205,7 @@ def test_on_llm_end_cleans_up_starts_entry() -> None:
 # on_chat_model_start
 # ---------------------------------------------------------------------------
 
+
 def test_on_chat_model_start_records_span() -> None:
     client = _make_client()
     h = _make_handler()
@@ -222,6 +228,7 @@ def test_on_chat_model_start_records_span() -> None:
 # on_llm_error
 # ---------------------------------------------------------------------------
 
+
 def test_on_llm_error_removes_entry() -> None:
     h = _make_handler()
     run_id = uuid4()
@@ -233,6 +240,7 @@ def test_on_llm_error_removes_entry() -> None:
 # ---------------------------------------------------------------------------
 # instrument_langchain — missing dependency
 # ---------------------------------------------------------------------------
+
 
 def test_instrument_langchain_creates_handler() -> None:
     """instrument_langchain returns a handler subclassing the mocked BaseCallbackHandler."""
@@ -270,5 +278,6 @@ def test_instrument_langchain_missing_dep_warns_and_raises() -> None:
             import importlib  # noqa: PLC0415
 
             from trulayer.instruments import langchain as lc_mod  # noqa: PLC0415
+
             importlib.reload(lc_mod)
             lc_mod.instrument_langchain(_make_client())
