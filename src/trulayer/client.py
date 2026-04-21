@@ -10,6 +10,7 @@ import httpx
 
 from trulayer.batch import BatchSender
 from trulayer.model import FeedbackData
+from trulayer.redact import Redactor
 from trulayer.trace import TraceContext
 
 _DEFAULT_ENDPOINT = "https://api.trulayer.ai"
@@ -42,6 +43,7 @@ class TruLayerClient:
         sample_rate: float = 1.0,
         scrub_fn: Callable[[str], str] | None = None,
         metadata_validator: Callable[[dict[str, Any]], None] | None = None,
+        redactor: Redactor | None = None,
         project_id: str | None = None,  # deprecated alias
         _sender: Any = None,
     ) -> None:
@@ -72,6 +74,7 @@ class TruLayerClient:
         self._sample_rate = sample_rate
         self._scrub_fn = scrub_fn
         self._metadata_validator = metadata_validator
+        self.redactor = redactor
 
         if _sender is not None:
             self._batch = _sender
