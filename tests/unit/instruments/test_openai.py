@@ -35,7 +35,7 @@ def _make_openai_response(content: str = "hello", model: str = "gpt-4o") -> Simp
 
 def test_record_span_inside_trace() -> None:
     client = _make_client()
-    with TraceContext(client, name="test") as t:
+    with TraceContext(client, name="test") as _:
         result = _make_openai_response("world")
         _record_span(client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, result, 0.1)
 
@@ -60,7 +60,9 @@ def test_record_span_malformed_result_still_records() -> None:
             raise AttributeError("no choices")
 
     with TraceContext(client, name="test") as _:
-        _record_span(client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, _BadResult(), 0.1)
+        _record_span(
+            client, {"model": "gpt-4o", "messages": [{"content": "hi"}]}, _BadResult(), 0.1
+        )
 
     payload = client._batch.enqueue.call_args[0][0]
     assert payload["spans"][0]["output"] == ""
@@ -82,8 +84,9 @@ def test_uninstrument_is_idempotent() -> None:
 def test_instrument_openai_no_openai_installed() -> None:
     """When openai is not installed, instrument_openai warns and returns gracefully."""
     client = _make_client()
-    with patch.dict(sys.modules, {"openai": None}):  # type: ignore[dict-item]
+    with patch.dict(sys.modules, {"openai": None}):
         import warnings
+
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             oai_module._patched = False
@@ -128,6 +131,7 @@ def test_instrument_openai_patches_and_unpatches() -> None:
 # ---------------------------------------------------------------------------
 # Streaming
 # ---------------------------------------------------------------------------
+
 
 def _make_chunk(text: str | None = "hello", usage: object | None = None) -> SimpleNamespace:
     delta = SimpleNamespace(content=text)
@@ -188,12 +192,15 @@ async def test_wrap_async_stream_records_span() -> None:
             yield c
 
     with TraceContext(client, name="async-stream") as _:
-        collected = [chunk async for chunk in _wrap_async_stream(
-            client,
-            {"model": "gpt-4o", "messages": [{"content": "question"}]},
-            _async_chunks(),
-            0.0,
-        )]
+        collected = [
+            chunk
+            async for chunk in _wrap_async_stream(
+                client,
+                {"model": "gpt-4o", "messages": [{"content": "question"}]},
+                _async_chunks(),
+                0.0,
+            )
+        ]
 
     assert len(collected) == 2
     payload = client._batch.enqueue.call_args[0][0]
@@ -204,6 +211,7 @@ async def test_wrap_async_stream_records_span() -> None:
 def test_wrap_sync_stream_exception_warns_and_records_partial() -> None:
     """Stream errors are caught, warned about, and partial output is recorded."""
     import warnings as _warnings
+
     client = _make_client()
 
     def _bad_stream() -> object:
@@ -237,7 +245,6 @@ async def test_instrument_openai_async_patched_function() -> None:
     client = _make_client()
 
     fake_response = _make_openai_response("async response")
-    original_async = MagicMock(return_value=fake_response)
 
     async def async_original(self: object, *args: object, **kwargs: object) -> object:
         return fake_response

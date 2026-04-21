@@ -150,9 +150,7 @@ def _patch_run_stream(
     agent.run_stream = instrumented_run_stream
 
 
-def _wrap_stream_iter(
-    stream_result: Any, span: Any, capture_output: bool
-) -> None:
+def _wrap_stream_iter(stream_result: Any, span: Any, capture_output: bool) -> None:
     """Wrap the stream result's async iteration to close the span when done."""
     original_stream_response = getattr(stream_result, "stream_response", None)
 

@@ -1,4 +1,5 @@
 """Tests for the LlamaIndex callback handler."""
+
 from __future__ import annotations
 
 import importlib
@@ -15,6 +16,7 @@ from trulayer.trace import TraceContext
 # ---------------------------------------------------------------------------
 # Fake LlamaIndex types — injected into sys.modules before importing the handler
 # ---------------------------------------------------------------------------
+
 
 class FakeCBEventType(Enum):
     LLM = "llm"
@@ -83,6 +85,7 @@ CBEventType = FakeCBEventType
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_client(project_id: str = "proj-1") -> MagicMock:
     client = MagicMock()
     client._project_id = project_id
@@ -102,6 +105,7 @@ def _make_handler() -> TruLayerCallbackHandler:
 # on_event_start — LLM
 # ---------------------------------------------------------------------------
 
+
 def test_on_event_start_llm_opens_span() -> None:
     handler = _make_handler()
     event_id = handler.on_event_start(
@@ -119,6 +123,7 @@ def test_on_event_start_llm_opens_span() -> None:
 # ---------------------------------------------------------------------------
 # on_event_end — LLM (closes span with output)
 # ---------------------------------------------------------------------------
+
 
 def test_on_event_end_llm_closes_span_with_output() -> None:
     client = _make_client()
@@ -148,6 +153,7 @@ def test_on_event_end_llm_closes_span_with_output() -> None:
 # on_event_start — QUERY
 # ---------------------------------------------------------------------------
 
+
 def test_on_event_start_query_opens_retrieval_span() -> None:
     handler = _make_handler()
     event_id = handler.on_event_start(
@@ -165,6 +171,7 @@ def test_on_event_start_query_opens_retrieval_span() -> None:
 # on_event_start — RETRIEVE
 # ---------------------------------------------------------------------------
 
+
 def test_on_event_start_retrieve_opens_retrieval_span() -> None:
     handler = _make_handler()
     handler.on_event_start(
@@ -180,6 +187,7 @@ def test_on_event_start_retrieve_opens_retrieval_span() -> None:
 # ---------------------------------------------------------------------------
 # on_event_end — QUERY (closes span with response output)
 # ---------------------------------------------------------------------------
+
 
 def test_on_event_end_query_closes_span_with_output() -> None:
     client = _make_client()
@@ -209,6 +217,7 @@ def test_on_event_end_query_closes_span_with_output() -> None:
 # Unknown event type uses default span type
 # ---------------------------------------------------------------------------
 
+
 def test_unknown_event_type_uses_default() -> None:
     handler = _make_handler()
     handler.on_event_start(
@@ -224,6 +233,7 @@ def test_unknown_event_type_uses_default() -> None:
 # on_event_end for unknown event_id is a no-op
 # ---------------------------------------------------------------------------
 
+
 def test_on_event_end_unknown_event_id_is_noop() -> None:
     handler = _make_handler()
     # Should not crash
@@ -238,6 +248,7 @@ def test_on_event_end_unknown_event_id_is_noop() -> None:
 # on_event_end outside a trace is a no-op
 # ---------------------------------------------------------------------------
 
+
 def test_on_event_end_outside_trace_is_noop() -> None:
     client = _make_client()
     handler = TruLayerCallbackHandler(client)
@@ -250,6 +261,7 @@ def test_on_event_end_outside_trace_is_noop() -> None:
 # start_trace / end_trace are no-ops
 # ---------------------------------------------------------------------------
 
+
 def test_start_trace_and_end_trace_are_noops() -> None:
     handler = _make_handler()
     handler.start_trace(trace_id="t1")
@@ -260,6 +272,7 @@ def test_start_trace_and_end_trace_are_noops() -> None:
 # ---------------------------------------------------------------------------
 # ImportError when llama_index is not installed
 # ---------------------------------------------------------------------------
+
 
 def test_import_error_when_llama_index_not_installed() -> None:
     """Verify that importing the module without llama_index raises ImportError."""

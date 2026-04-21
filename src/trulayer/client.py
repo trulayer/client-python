@@ -58,8 +58,7 @@ class TruLayerClient:
                 raise TypeError("trulayer: project_name is required")
         if project_id and not project_name:
             warnings.warn(
-                "trulayer: `project_id` is deprecated; rename to `project_name`. "
-                "Removed in 0.3.x.",
+                "trulayer: `project_id` is deprecated; rename to `project_name`. Removed in 0.3.x.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -136,7 +135,7 @@ class TruLayerClient:
             )
             resp.raise_for_status()
         except Exception as exc:
-            warnings.warn(f"trulayer: feedback submission failed: {exc}")
+            warnings.warn(f"trulayer: feedback submission failed: {exc}", stacklevel=2)
 
     def flush(self, timeout: float = 5.0) -> None:
         """Flush buffered events. Blocks until complete or timeout."""

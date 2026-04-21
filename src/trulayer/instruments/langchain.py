@@ -127,13 +127,9 @@ def _on_llm_end(self: Any, response: Any, *, run_id: UUID, **kwargs: Any) -> Non
         try:
             usage = getattr(response, "llm_output", {}) or {}
             token_usage = usage.get("token_usage") or usage.get("usage", {})
-            prompt_tokens = (
-                token_usage.get("prompt_tokens")
-                or token_usage.get("input_tokens")
-            )
-            completion_tokens = (
-                token_usage.get("completion_tokens")
-                or token_usage.get("output_tokens")
+            prompt_tokens = token_usage.get("prompt_tokens") or token_usage.get("input_tokens")
+            completion_tokens = token_usage.get("completion_tokens") or token_usage.get(
+                "output_tokens"
             )
         except Exception:
             pass

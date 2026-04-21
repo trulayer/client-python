@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from trulayer.instruments.autogen import instrument_autogen
 from trulayer.trace import TraceContext
-
 
 # ---------------------------------------------------------------------------
 # Mock AutoGen types
@@ -53,7 +52,7 @@ def _make_client() -> MagicMock:
 
 def _get_spans(client: MagicMock) -> list[dict[str, Any]]:
     payload = client._batch.enqueue.call_args[0][0]
-    return payload["spans"]
+    return cast(list[dict[str, Any]], payload["spans"])
 
 
 # ---------------------------------------------------------------------------
@@ -135,11 +134,13 @@ def test_exception_from_initiate_chat() -> None:
             raise RuntimeError("chat failed")
 
     agent = FailingAgent(name="assistant")
-    with pytest.warns(match="error during AutoGen initiate_chat"):
-        with pytest.raises(RuntimeError, match="chat failed"):
-            with TraceContext(client, name="trace") as ctx:
-                instrument_autogen(agent, ctx)
-                agent.initiate_chat(recipient=None, message="hello")
+    with (
+        pytest.warns(match="error during AutoGen initiate_chat"),
+        pytest.raises(RuntimeError, match="chat failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_autogen(agent, ctx)
+        agent.initiate_chat(recipient=None, message="hello")
 
 
 # ---------------------------------------------------------------------------

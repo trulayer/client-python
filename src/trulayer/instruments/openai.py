@@ -63,6 +63,7 @@ def uninstrument_openai() -> None:
         return
     try:
         import openai  # noqa: PLC0415
+
         if _original_create:
             openai.resources.chat.completions.Completions.create = _original_create
         if _original_acreate:
@@ -215,4 +216,7 @@ async def _wrap_async_stream(
             span.__exit__(*exc_info)
 
     except Exception as exc:
-        warnings.warn(f"trulayer: failed to record OpenAI async streaming span: {exc}", stacklevel=2)
+        warnings.warn(
+            f"trulayer: failed to record OpenAI async streaming span: {exc}",
+            stacklevel=2,
+        )

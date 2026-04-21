@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from openapi_spec_validator import validate
@@ -25,7 +25,7 @@ def load_spec() -> dict[str, Any]:
     import yaml  # type: ignore[import-untyped]
 
     with open(SPEC_PATH) as f:
-        return yaml.safe_load(f)
+        return cast(dict[str, Any], yaml.safe_load(f))
 
 
 @pytest.fixture(scope="module")

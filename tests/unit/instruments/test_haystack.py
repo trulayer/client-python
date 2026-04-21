@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from trulayer.instruments.haystack import instrument_haystack
 from trulayer.trace import TraceContext
-
 
 # ---------------------------------------------------------------------------
 # Mock Haystack types
@@ -72,7 +71,7 @@ def _make_client() -> MagicMock:
 
 def _get_spans(client: MagicMock) -> list[dict[str, Any]]:
     payload = client._batch.enqueue.call_args[0][0]
-    return payload["spans"]
+    return cast(list[dict[str, Any]], payload["spans"])
 
 
 # ---------------------------------------------------------------------------
@@ -162,8 +161,10 @@ def test_exception_propagates() -> None:
             raise ValueError("pipeline failed")
 
     pipeline = FailingPipeline()
-    with pytest.warns(match="error during Haystack pipeline run"):
-        with pytest.raises(ValueError, match="pipeline failed"):
-            with TraceContext(client, name="trace") as ctx:
-                instrument_haystack(pipeline, ctx)
-                pipeline.run(data={"query": "test"})
+    with (
+        pytest.warns(match="error during Haystack pipeline run"),
+        pytest.raises(ValueError, match="pipeline failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_haystack(pipeline, ctx)
+        pipeline.run(data={"query": "test"})

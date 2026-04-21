@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from trulayer.instruments.pydanticai import instrument_pydanticai
 from trulayer.trace import TraceContext
-
 
 # ---------------------------------------------------------------------------
 # Mock PydanticAI types
@@ -84,7 +83,7 @@ def _make_client() -> MagicMock:
 def _get_spans(client: MagicMock) -> list[dict[str, Any]]:
     """Extract spans from the enqueued payload."""
     payload = client._batch.enqueue.call_args[0][0]
-    return payload["spans"]
+    return cast(list[dict[str, Any]], payload["spans"])
 
 
 # ---------------------------------------------------------------------------
@@ -253,10 +252,12 @@ async def test_exception_propagates() -> None:
             raise ValueError("model exploded")
 
     agent = FailingAgent()
-    with pytest.raises(ValueError, match="model exploded"):
-        with TraceContext(client, name="trace") as ctx:
-            instrument_pydanticai(agent, ctx)
-            await agent.run("prompt")
+    with (
+        pytest.raises(ValueError, match="model exploded"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_pydanticai(agent, ctx)
+        await agent.run("prompt")
 
     spans = _get_spans(client)
     agent_spans = [s for s in spans if s["span_type"] == "agent"]

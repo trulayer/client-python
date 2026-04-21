@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from trulayer.instruments.crewai import instrument_crewai
 from trulayer.trace import TraceContext
-
 
 # ---------------------------------------------------------------------------
 # Mock CrewAI types
@@ -66,7 +65,7 @@ def _make_client() -> MagicMock:
 
 def _get_spans(client: MagicMock) -> list[dict[str, Any]]:
     payload = client._batch.enqueue.call_args[0][0]
-    return payload["spans"]
+    return cast(list[dict[str, Any]], payload["spans"])
 
 
 # ---------------------------------------------------------------------------
@@ -159,11 +158,13 @@ def test_exception_from_kickoff_reraises() -> None:
             raise RuntimeError("crew failed")
 
     crew = FailingCrew()
-    with pytest.warns(match="error during CrewAI kickoff"):
-        with pytest.raises(RuntimeError, match="crew failed"):
-            with TraceContext(client, name="trace") as ctx:
-                instrument_crewai(crew, ctx)
-                crew.kickoff()
+    with (
+        pytest.warns(match="error during CrewAI kickoff"),
+        pytest.raises(RuntimeError, match="crew failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_crewai(crew, ctx)
+        crew.kickoff()
 
 
 # ---------------------------------------------------------------------------

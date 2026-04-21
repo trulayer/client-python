@@ -120,6 +120,7 @@ def test_trace_set_metadata_and_add_tag() -> None:
 # Sampling
 # ---------------------------------------------------------------------------
 
+
 def test_sample_rate_1_always_enqueues() -> None:
     client = _make_client(sample_rate=1.0)
     with TraceContext(client, name="t"):
@@ -159,6 +160,7 @@ def test_enqueue_error_is_swallowed() -> None:
 # ---------------------------------------------------------------------------
 # PII scrubbing
 # ---------------------------------------------------------------------------
+
 
 def test_scrub_payload_scrubs_trace_fields() -> None:
     payload: dict[str, object] = {
@@ -224,6 +226,7 @@ def test_scrub_fn_exception_does_not_propagate() -> None:
 # Metadata validation
 # ---------------------------------------------------------------------------
 
+
 def test_validate_metadata_passes_valid() -> None:
     def _require_source(m: dict[str, object]) -> None:
         if "source" not in m:
@@ -282,9 +285,8 @@ def test_metadata_validator_applied_on_enqueue() -> None:
 
     with _w.catch_warnings(record=True) as caught:
         _w.simplefilter("always")
-        with TraceContext(client, name="t", metadata={"bad": "data"}) as t:
-            with t.span("s") as span:
-                span.set_metadata(env="prod")
+        with TraceContext(client, name="t", metadata={"bad": "data"}) as t, t.span("s") as span:
+            span.set_metadata(env="prod")
 
     payload = client._batch.enqueue.call_args[0][0]
     assert payload["metadata"] == {}
@@ -303,6 +305,7 @@ def test_metadata_validator_none_is_noop() -> None:
 
 def test_sample_rate_missing_on_client_defaults_to_always() -> None:
     """Client without _sample_rate attribute defaults to always sampling."""
+
     class _MinimalClient:
         _project_id = "proj-1"
         _batch: MagicMock = MagicMock()

@@ -63,6 +63,7 @@ def uninstrument_anthropic() -> None:
         return
     try:
         import anthropic  # noqa: PLC0415
+
         if _original_create:
             anthropic.resources.messages.Messages.create = _original_create
         if _original_acreate:
@@ -225,4 +226,7 @@ async def _wrap_async_stream(
             span.__exit__(*exc_info)
 
     except Exception as exc:
-        warnings.warn(f"trulayer: failed to record Anthropic async streaming span: {exc}", stacklevel=2)
+        warnings.warn(
+            f"trulayer: failed to record Anthropic async streaming span: {exc}",
+            stacklevel=2,
+        )

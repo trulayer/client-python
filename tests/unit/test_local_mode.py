@@ -8,8 +8,7 @@ from unittest import mock
 import pytest
 
 from trulayer.local_batch import LocalBatchSender
-from trulayer.testing import SenderAssertions, assert_sender, create_test_client
-
+from trulayer.testing import assert_sender, create_test_client
 
 # ---------------------------------------------------------------------------
 # LocalBatchSender unit tests
@@ -36,17 +35,21 @@ class TestLocalBatchSender:
     def test_local_batch_sender_spans_property(self) -> None:
         """spans property returns flat spans across all traces."""
         sender = LocalBatchSender()
-        sender.enqueue({
-            "id": "t1",
-            "spans": [
-                {"name": "s1", "span_type": "llm"},
-                {"name": "s2", "span_type": "tool"},
-            ],
-        })
-        sender.enqueue({
-            "id": "t2",
-            "spans": [{"name": "s3", "span_type": "default"}],
-        })
+        sender.enqueue(
+            {
+                "id": "t1",
+                "spans": [
+                    {"name": "s1", "span_type": "llm"},
+                    {"name": "s2", "span_type": "tool"},
+                ],
+            }
+        )
+        sender.enqueue(
+            {
+                "id": "t2",
+                "spans": [{"name": "s3", "span_type": "default"}],
+            }
+        )
         assert len(sender.spans) == 3
         assert [s["name"] for s in sender.spans] == ["s1", "s2", "s3"]
 
@@ -77,10 +80,9 @@ class TestCreateTestClient:
     def test_create_test_client_captures_spans(self) -> None:
         """After trace + flush, sender.spans has data."""
         client, sender = create_test_client(project_name="test-proj")
-        with client.trace("my-trace") as t:
-            with t.span("step-1", "llm") as span:
-                span.set_input("hello")
-                span.set_output("world")
+        with client.trace("my-trace") as t, t.span("step-1", "llm") as span:
+            span.set_input("hello")
+            span.set_output("world")
         client.flush()
         assert len(sender.traces) == 1
         assert len(sender.spans) == 1

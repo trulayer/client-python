@@ -53,7 +53,7 @@ class BatchSender:
             try:
                 future.result(timeout=timeout)
             except Exception as exc:
-                warnings.warn(f"trulayer: flush on shutdown failed: {exc}")
+                warnings.warn(f"trulayer: flush on shutdown failed: {exc}", stacklevel=2)
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._thread.join(timeout=timeout)
 
@@ -98,7 +98,8 @@ class BatchSender:
                 if attempt == _MAX_RETRIES - 1:
                     warnings.warn(
                         f"trulayer: failed to send batch of {len(items)} items after "
-                        f"{_MAX_RETRIES} retries: {exc}"
+                        f"{_MAX_RETRIES} retries: {exc}",
+                        stacklevel=2,
                     )
                     return
                 delay = _RETRY_BASE_DELAY * (2**attempt)
