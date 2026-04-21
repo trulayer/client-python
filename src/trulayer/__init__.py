@@ -16,6 +16,7 @@ from trulayer.instruments.openai import instrument_openai, uninstrument_openai
 from trulayer.instruments.pydanticai import instrument_pydanticai
 from trulayer.local_batch import LocalBatchSender
 from trulayer.model import EventData, FeedbackData, SpanData, TraceData
+from trulayer.redact import BUILTIN_PACKS, Redactor, Rule, redact
 from trulayer.testing import SenderAssertions, assert_sender, create_test_client
 from trulayer.trace import TraceContext, current_trace
 
@@ -31,6 +32,7 @@ def init(
     sample_rate: float = 1.0,
     scrub_fn: Callable[[str], str] | None = None,
     metadata_validator: Callable[[dict[str, Any]], None] | None = None,
+    redactor: Redactor | None = None,
     project_id: str | None = None,  # deprecated alias
 ) -> TruLayerClient:
     """
@@ -52,6 +54,7 @@ def init(
         sample_rate=sample_rate,
         scrub_fn=scrub_fn,
         metadata_validator=metadata_validator,
+        redactor=redactor,
     )
     return _global_client
 
@@ -109,4 +112,8 @@ __all__ = [
     "uninstrument_dspy",
     "instrument_haystack",
     "instrument_autogen",
+    "Redactor",
+    "Rule",
+    "redact",
+    "BUILTIN_PACKS",
 ]
