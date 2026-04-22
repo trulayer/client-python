@@ -264,3 +264,229 @@ async def test_exception_propagates() -> None:
     assert len(agent_spans) == 1
     assert agent_spans[0]["metadata"]["error"] == "model exploded"
     assert agent_spans[0]["error"] is True
+
+
+# ---------------------------------------------------------------------------
+# 9. test_instrument_pydanticai_exception_in_patch_warns
+# ---------------------------------------------------------------------------
+
+
+def test_instrument_pydanticai_exception_in_patch_warns() -> None:
+    """If patching raises internally, instrument_pydanticai warns and returns agent."""
+    import warnings
+    from unittest.mock import patch as mock_patch
+
+    client = _make_client()
+    agent = MockAgent()
+
+    with TraceContext(client, name="trace") as ctx:
+        # Patch _patch_run to raise an exception
+        with mock_patch(
+            "trulayer.instruments.pydanticai._patch_run", side_effect=RuntimeError("patch failed")
+        ):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                result = instrument_pydanticai(agent, ctx)
+                assert result is agent
+                assert any("instrument" in str(warning.message).lower() for warning in w)
+
+
+# ---------------------------------------------------------------------------
+# 10. test_run_sync_exception_propagates
+# ---------------------------------------------------------------------------
+
+
+def test_run_sync_exception_propagates() -> None:
+    """Exception in run_sync should propagate and record error metadata."""
+    client = _make_client()
+
+    class FailingSyncAgent(MockAgent):
+        def run_sync(self, prompt: str, *, deps: Any = None, **kwargs: Any) -> MockResult:
+            raise ValueError("sync exploded")
+
+    agent = FailingSyncAgent()
+    with (
+        pytest.raises(ValueError, match="sync exploded"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_pydanticai(agent, ctx)
+        agent.run_sync("prompt")
+
+    spans = _get_spans(client)
+    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    assert len(agent_spans) == 1
+    assert agent_spans[0]["metadata"]["error"] == "sync exploded"
+    assert agent_spans[0]["error"] is True
+
+
+# ---------------------------------------------------------------------------
+# 11. test_run_sync_usage_exception_swallowed
+# ---------------------------------------------------------------------------
+
+
+def test_run_sync_usage_exception_swallowed() -> None:
+    """If result.usage() raises in run_sync, the exception is swallowed."""
+    client = _make_client()
+
+    class NoUsageResult(MockResult):
+        def usage(self) -> MockUsage:
+            raise RuntimeError("no usage")
+
+    class NoUsageAgent(MockAgent):
+        def run_sync(self, prompt: str, *, deps: Any = None, **kwargs: Any) -> MockResult:
+            return NoUsageResult()
+
+    agent = NoUsageAgent()
+    with TraceContext(client, name="trace") as ctx:
+        instrument_pydanticai(agent, ctx)
+        result = agent.run_sync("prompt")
+
+    assert result.data == "Paris"
+    spans = _get_spans(client)
+    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    assert len(agent_spans) == 1
+
+
+# ---------------------------------------------------------------------------
+# 12. test_run_stream_exception_propagates
+# ---------------------------------------------------------------------------
+
+
+async def test_run_stream_exception_propagates() -> None:
+    """Exception in run_stream call should propagate and close the span."""
+    client = _make_client()
+
+    class FailingStreamAgent(MockAgent):
+        async def run_stream(self, prompt: str, **kwargs: Any) -> Any:
+            raise ValueError("stream setup failed")
+
+    agent = FailingStreamAgent()
+    with (
+        pytest.raises(ValueError, match="stream setup failed"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_pydanticai(agent, ctx)
+        await agent.run_stream("prompt")
+
+    spans = _get_spans(client)
+    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    assert len(agent_spans) == 1
+    assert agent_spans[0]["metadata"]["error"] == "stream setup failed"
+    assert agent_spans[0]["error"] is True
+
+
+# ---------------------------------------------------------------------------
+# 13. test_stream_iter_no_stream_response_attribute
+# ---------------------------------------------------------------------------
+
+
+async def test_stream_iter_no_stream_response_attribute() -> None:
+    """If stream result has no stream_response, span should close immediately."""
+    client = _make_client()
+
+    class NoStreamResponseResult:
+        pass
+
+    class AgentWithNoStreamResponse(MockAgent):
+        async def run_stream(self, prompt: str, **kwargs: Any) -> Any:
+            return NoStreamResponseResult()
+
+    agent = AgentWithNoStreamResponse()
+    with TraceContext(client, name="trace") as ctx:
+        instrument_pydanticai(agent, ctx)
+        stream_result = await agent.run_stream("prompt")
+
+    assert isinstance(stream_result, NoStreamResponseResult)
+    spans = _get_spans(client)
+    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    assert len(agent_spans) == 1
+
+
+# ---------------------------------------------------------------------------
+# 14. test_stream_iter_exception_in_stream_response
+# ---------------------------------------------------------------------------
+
+
+async def test_stream_iter_exception_in_stream_response() -> None:
+    """Exception during stream_response iteration should record error on span."""
+    client = _make_client()
+
+    class FailingStreamResult:
+        async def stream_response(self) -> Any:
+            yield "partial"
+            raise RuntimeError("stream broke")
+
+    class AgentWithFailingStream(MockAgent):
+        async def run_stream(self, prompt: str, **kwargs: Any) -> Any:
+            return FailingStreamResult()
+
+    agent = AgentWithFailingStream()
+    with TraceContext(client, name="trace") as ctx:
+        instrument_pydanticai(agent, ctx)
+        stream_result = await agent.run_stream("prompt")
+        with pytest.raises(RuntimeError, match="stream broke"):
+            async for _ in stream_result.stream_response():
+                pass
+
+    spans = _get_spans(client)
+    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    assert len(agent_spans) == 1
+    assert agent_spans[0]["metadata"]["error"] == "stream broke"
+    assert agent_spans[0]["error"] is True
+
+
+# ---------------------------------------------------------------------------
+# 15. test_tool_call_no_kwargs
+# ---------------------------------------------------------------------------
+
+
+async def test_tool_call_no_kwargs() -> None:
+    """Tool call with no kwargs should not set input on span."""
+    client = _make_client()
+    agent = MockAgent()
+
+    async def no_arg_tool() -> str:
+        return "done"
+
+    agent._function_tools["no_arg_tool"] = MockToolObj(no_arg_tool)
+
+    with TraceContext(client, name="trace") as ctx:
+        instrument_pydanticai(agent, ctx)
+        tool_fn = agent._function_tools["no_arg_tool"].function
+        result = await tool_fn()
+
+    assert result == "done"
+    spans = _get_spans(client)
+    tool_spans = [s for s in spans if s["span_type"] == "tool"]
+    assert len(tool_spans) == 1
+    assert tool_spans[0]["input"] is None
+
+
+# ---------------------------------------------------------------------------
+# 16. test_tool_call_exception_propagates
+# ---------------------------------------------------------------------------
+
+
+async def test_tool_call_exception_propagates() -> None:
+    """Exception in tool function should propagate and record error."""
+    client = _make_client()
+    agent = MockAgent()
+
+    async def failing_tool(x: int = 1) -> str:
+        raise ValueError("tool broke")
+
+    agent._function_tools["failing_tool"] = MockToolObj(failing_tool)
+
+    with (
+        pytest.raises(ValueError, match="tool broke"),
+        TraceContext(client, name="trace") as ctx,
+    ):
+        instrument_pydanticai(agent, ctx)
+        tool_fn = agent._function_tools["failing_tool"].function
+        await tool_fn(x=5)
+
+    spans = _get_spans(client)
+    tool_spans = [s for s in spans if s["span_type"] == "tool"]
+    assert len(tool_spans) == 1
+    assert tool_spans[0]["metadata"]["error"] == "tool broke"
+    assert tool_spans[0]["error"] is True

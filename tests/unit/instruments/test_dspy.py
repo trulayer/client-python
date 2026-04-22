@@ -161,3 +161,80 @@ def test_double_instrument_is_idempotent() -> None:
     finally:
         uninstrument_dspy()
         _cleanup_fake_dspy()
+
+
+# ---------------------------------------------------------------------------
+# 6. instrument_dspy with dspy not installed warns and returns
+# ---------------------------------------------------------------------------
+
+
+def test_instrument_dspy_no_package_warns() -> None:
+    import warnings
+
+    _cleanup_fake_dspy()
+    client = _make_client()
+    with TraceContext(client, name="trace") as ctx:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            # Ensure dspy is not importable
+            sys.modules["dspy"] = None  # type: ignore[assignment]
+            try:
+                instrument_dspy(ctx)
+            finally:
+                sys.modules.pop("dspy", None)
+        assert any("dspy" in str(warning.message).lower() for warning in w)
+
+
+# ---------------------------------------------------------------------------
+# 7. uninstrument_dspy with dspy not installed is a noop
+# ---------------------------------------------------------------------------
+
+
+def test_uninstrument_dspy_no_package() -> None:
+    """uninstrument_dspy should not raise when dspy is not installed."""
+    _cleanup_fake_dspy()
+    sys.modules["dspy"] = None  # type: ignore[assignment]
+    try:
+        uninstrument_dspy()  # should not raise
+    finally:
+        sys.modules.pop("dspy", None)
+
+
+# ---------------------------------------------------------------------------
+# 8. forward raises → exception propagates + span records error + warns
+# ---------------------------------------------------------------------------
+
+
+def test_forward_exception_propagates_and_records_error() -> None:
+    import warnings
+
+    mod = _install_fake_dspy()
+
+    class FailingPredict(mod.Predict):  # type: ignore[name-defined]
+        def forward(self, **kwargs: Any) -> Any:
+            raise ValueError("forward failed")
+
+    # Override Predict with the failing subclass
+    mod.Predict = FailingPredict  # type: ignore[attr-defined]
+
+    try:
+        client = _make_client()
+        with TraceContext(client, name="trace") as ctx:
+            instrument_dspy(ctx)
+            p = mod.Predict()
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                import pytest
+
+                with pytest.raises(ValueError, match="forward failed"):
+                    p.forward(question="boom?")
+            assert any("error during DSPy" in str(warning.message) for warning in w)
+
+        spans = _get_spans(client)
+        llm_spans = [s for s in spans if s["span_type"] == "llm"]
+        assert len(llm_spans) == 1
+        assert llm_spans[0]["metadata"]["error"] == "forward failed"
+        assert llm_spans[0]["error"] is True
+    finally:
+        uninstrument_dspy()
+        _cleanup_fake_dspy()
