@@ -210,7 +210,7 @@ def test_forward_exception_propagates_and_records_error() -> None:
 
     mod = _install_fake_dspy()
 
-    class FailingPredict(mod.Predict):  # type: ignore[name-defined]
+    class FailingPredict(mod.Predict):  # type: ignore[misc,name-defined]
         def forward(self, **kwargs: Any) -> Any:
             raise ValueError("forward failed")
 
