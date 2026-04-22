@@ -34,6 +34,7 @@ A task is **not done** until all of the following are true — in order:
 4. **PR opened** — `gh pr create` targeting `main` with a summary of what changed and why.
 5. **PR merged** — `gh pr merge --squash`. Work on the next task cannot begin until this PR is merged.
 5. **Working tree clean** — after merge, `git status` must show nothing to commit. No uncommitted modifications, no untracked feature files. If something is still local, commit it or delete it — leaving code in a branch without a PR is the same as it not existing.
+6. **Branch deleted** — delete the remote feature branch immediately after the PR is squash-merged: `git push origin --delete <branch-name>` (or use the GitHub UI "Delete branch" button). Merged branches are noise — clean them up every time, not in periodic sweeps.
 
 **Direct pushes to `main` are forbidden.** Every change must go through a pull request.
 
