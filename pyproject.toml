@@ -27,6 +27,17 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/trulayer"]
 
+[tool.hatch.build.targets.wheel.force-include]
+".claude/skills" = "trulayer/.claude/skills"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/trulayer",
+    ".claude/skills",
+    "README.md",
+    "pyproject.toml",
+]
+
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0.0",
