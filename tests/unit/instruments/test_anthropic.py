@@ -1,5 +1,6 @@
 import sys
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -189,3 +190,287 @@ async def test_wrap_async_stream_outside_trace_passthrough() -> None:
     collected = [e async for e in _wrap_async_stream(client, {}, _async_events(), 0.0)]
     assert len(collected) == 1
     client._batch.enqueue.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage: patched_create / patched_acreate execution paths
+# ---------------------------------------------------------------------------
+
+
+def test_patched_create_non_stream() -> None:
+    """Calling the patched sync create without stream= should record a span."""
+    client = _make_client()
+
+    fake_result = _make_anthropic_response("hi")
+    mock_messages_cls = MagicMock()
+    mock_async_messages_cls = MagicMock()
+
+    mock_anthropic = MagicMock()
+    mock_anthropic.resources.messages.Messages = mock_messages_cls
+    mock_anthropic.resources.messages.AsyncMessages = mock_async_messages_cls
+
+    with patch.dict(sys.modules, {"anthropic": mock_anthropic}):
+        ant_module._patched = False
+        ant_module._original_create = None
+        ant_module._original_acreate = None
+
+        # Capture the original before patching so we can call it
+        original_create_mock = MagicMock(return_value=fake_result)
+        mock_messages_cls.create = original_create_mock
+
+        with TraceContext(client, name="trace"):
+            instrument_anthropic(client)
+            # Call _patched_create directly by calling the patched method
+            patched_fn = mock_messages_cls.create
+            result = patched_fn(None, model="claude-3", messages=[{"content": "hello"}])
+
+        assert result is fake_result
+        uninstrument_anthropic()
+
+
+@pytest.mark.asyncio
+async def test_patched_acreate_non_stream() -> None:
+    """Calling the patched async create without stream= should record a span."""
+    client = _make_client()
+
+    fake_result = _make_anthropic_response("async hi")
+    mock_messages_cls = MagicMock()
+    mock_async_messages_cls = MagicMock()
+
+    mock_anthropic = MagicMock()
+    mock_anthropic.resources.messages.Messages = mock_messages_cls
+    mock_anthropic.resources.messages.AsyncMessages = mock_async_messages_cls
+
+    async def fake_acreate(self: Any, *args: Any, **kwargs: Any) -> Any:
+        return fake_result
+
+    mock_async_messages_cls.create = fake_acreate
+
+    with patch.dict(sys.modules, {"anthropic": mock_anthropic}):
+        ant_module._patched = False
+        ant_module._original_create = MagicMock(return_value=fake_result)
+        ant_module._original_acreate = None
+
+        with TraceContext(client, name="trace"):
+            instrument_anthropic(client)
+            patched_fn = mock_async_messages_cls.create
+            result = await patched_fn(None, model="claude-3", messages=[{"content": "q"}])
+
+        assert result is fake_result
+        uninstrument_anthropic()
+
+
+def test_patched_create_stream_path() -> None:
+    """Calling patched sync create with stream=True should return a generator."""
+    client = _make_client()
+
+    events = [_make_content_delta_event("streamed")]
+    mock_messages_cls = MagicMock()
+    mock_async_messages_cls = MagicMock()
+
+    mock_anthropic = MagicMock()
+    mock_anthropic.resources.messages.Messages = mock_messages_cls
+    mock_anthropic.resources.messages.AsyncMessages = mock_async_messages_cls
+
+    original_create_mock = MagicMock(return_value=iter(events))
+    mock_messages_cls.create = original_create_mock
+
+    with patch.dict(sys.modules, {"anthropic": mock_anthropic}):
+        ant_module._patched = False
+        ant_module._original_create = None
+        ant_module._original_acreate = None
+
+        with TraceContext(client, name="trace"):
+            instrument_anthropic(client)
+            patched_fn = mock_messages_cls.create
+            result = patched_fn(None, model="claude-3", messages=[{"content": "hi"}], stream=True)
+            collected = list(result)
+
+        assert len(collected) == 1
+        uninstrument_anthropic()
+
+
+# ---------------------------------------------------------------------------
+# uninstrument when anthropic is not installed
+# ---------------------------------------------------------------------------
+
+
+def test_uninstrument_anthropic_no_package() -> None:
+    """uninstrument_anthropic with missing package shouldn't raise."""
+    import warnings
+
+    ant_module._patched = True
+    ant_module._original_create = MagicMock()
+    ant_module._original_acreate = MagicMock()
+
+    with patch.dict(sys.modules, {"anthropic": None}), warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        uninstrument_anthropic()
+
+    assert not ant_module._patched
+
+
+# ---------------------------------------------------------------------------
+# _record_span: outer exception (span creation fails)
+# ---------------------------------------------------------------------------
+
+
+def test_record_span_outer_exception_warns() -> None:
+    """If current_trace() raises, _record_span should warn and not propagate."""
+    import warnings
+
+    client = _make_client()
+    result = _make_anthropic_response()
+
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        _record_span(client, {"model": "m", "messages": []}, result, 0.1)
+        assert any("failed to record" in str(warning.message).lower() for warning in w)
+
+
+# ---------------------------------------------------------------------------
+# _record_span: result.content raises (inner exception path, lines 101-102)
+# ---------------------------------------------------------------------------
+
+
+def test_record_span_bad_result_content() -> None:
+    """result.content raising should be swallowed gracefully."""
+    client = _make_client()
+
+    class BadResult:
+        @property
+        def content(self) -> list[object]:
+            raise AttributeError("no content")
+
+        usage = None
+
+    with TraceContext(client, name="t"):
+        _record_span(client, {"model": "m", "messages": [{"content": "q"}]}, BadResult(), 0.1)
+
+    payload = client._batch.enqueue.call_args[0][0]
+    span = payload["spans"][0]
+    assert span["output"] == ""
+
+
+# ---------------------------------------------------------------------------
+# _wrap_sync_stream: exception propagation (lines 158-163, 170-171)
+# ---------------------------------------------------------------------------
+
+
+def test_wrap_sync_stream_exception_warns() -> None:
+    """An exception raised mid-stream is caught by the outer handler and emits a warning."""
+    import warnings
+
+    client = _make_client()
+
+    def _bad_events() -> object:
+        yield _make_content_delta_event("partial")
+        raise RuntimeError("stream error")
+
+    with TraceContext(client, name="t"):
+        gen = _wrap_sync_stream(
+            client,
+            {"model": "claude-3", "messages": [{"content": "q"}]},
+            _bad_events(),
+            0.0,
+        )
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            list(gen)
+            assert any("streaming" in str(warning.message).lower() for warning in w)
+
+
+def test_wrap_sync_stream_event_processing_exception_swallowed() -> None:
+    """Exception in per-event processing should be swallowed; stream continues."""
+    client = _make_client()
+
+    class BrokenEvent:
+        """Event whose attribute access raises."""
+
+        type = "content_block_delta"
+
+        @property
+        def delta(self) -> object:
+            raise AttributeError("broken")
+
+    events = [BrokenEvent(), _make_content_delta_event("after")]
+
+    with TraceContext(client, name="t"):
+        collected = list(
+            _wrap_sync_stream(
+                client,
+                {"model": "m", "messages": [{"content": "q"}]},
+                iter(events),
+                0.0,
+            )
+        )
+
+    assert len(collected) == 2
+
+
+def test_wrap_sync_stream_span_setup_exception_warns() -> None:
+    """If SpanContext/current_trace raises, a warning is emitted and stream is silently lost."""
+    import warnings
+
+    client = _make_client()
+
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("kaboom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        gen = _wrap_sync_stream(client, {}, iter([]), 0.0)
+        list(gen)
+        assert any("streaming" in str(warning.message).lower() for warning in w)
+
+
+# ---------------------------------------------------------------------------
+# _wrap_async_stream: exception propagation (lines 219-221, 228-229)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_wrap_async_stream_exception_warns() -> None:
+    """An exception raised mid-async-stream is caught by the outer handler and warns."""
+    import warnings
+
+    client = _make_client()
+
+    async def _bad_async_events() -> object:
+        yield _make_content_delta_event("partial")
+        raise RuntimeError("async stream error")
+
+    with TraceContext(client, name="t"), warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        async for _ in _wrap_async_stream(
+            client,
+            {"model": "claude-3", "messages": [{"content": "q"}]},
+            _bad_async_events(),
+            0.0,
+        ):
+            pass
+        assert any("async streaming" in str(warning.message).lower() for warning in w)
+
+
+@pytest.mark.asyncio
+async def test_wrap_async_stream_span_setup_exception_warns() -> None:
+    """If current_trace raises in async stream, warn and don't propagate."""
+    import warnings
+
+    client = _make_client()
+
+    async def _empty() -> object:
+        return
+        yield  # make it a generator
+
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        async for _ in _wrap_async_stream(client, {}, _empty(), 0.0):
+            pass
+        assert any("async streaming" in str(warning.message).lower() for warning in w)

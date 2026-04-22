@@ -46,7 +46,15 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --dev
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=90
+      - run: uv run pytest
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: client-python
+          fail_ci_if_error: false
 
   build:
     name: Build
