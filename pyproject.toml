@@ -42,7 +42,7 @@ dev-dependencies = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src/trulayer --cov-report=term-missing"
+addopts = "--cov=src/trulayer --cov-report=term-missing --cov-fail-under=90"
 
 [tool.ruff]
 src = ["src"]
