@@ -279,16 +279,17 @@ def test_instrument_pydanticai_exception_in_patch_warns() -> None:
     client = _make_client()
     agent = MockAgent()
 
-    with TraceContext(client, name="trace") as ctx:
-        # Patch _patch_run to raise an exception
-        with mock_patch(
+    with (
+        TraceContext(client, name="trace") as ctx,
+        mock_patch(
             "trulayer.instruments.pydanticai._patch_run", side_effect=RuntimeError("patch failed")
-        ):
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                result = instrument_pydanticai(agent, ctx)
-                assert result is agent
-                assert any("instrument" in str(warning.message).lower() for warning in w)
+        ),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        result = instrument_pydanticai(agent, ctx)
+        assert result is agent
+        assert any("instrument" in str(warning.message).lower() for warning in w)
 
 
 # ---------------------------------------------------------------------------

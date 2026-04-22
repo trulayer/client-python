@@ -1,5 +1,6 @@
 import sys
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -240,8 +241,6 @@ async def test_patched_acreate_non_stream() -> None:
     mock_anthropic.resources.messages.Messages = mock_messages_cls
     mock_anthropic.resources.messages.AsyncMessages = mock_async_messages_cls
 
-    import asyncio
-
     async def fake_acreate(self: Any, *args: Any, **kwargs: Any) -> Any:
         return fake_result
 
@@ -304,10 +303,9 @@ def test_uninstrument_anthropic_no_package() -> None:
     ant_module._original_create = MagicMock()
     ant_module._original_acreate = MagicMock()
 
-    with patch.dict(sys.modules, {"anthropic": None}):
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            uninstrument_anthropic()
+    with patch.dict(sys.modules, {"anthropic": None}), warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        uninstrument_anthropic()
 
     assert not ant_module._patched
 
@@ -324,11 +322,13 @@ def test_record_span_outer_exception_warns() -> None:
     client = _make_client()
     result = _make_anthropic_response()
 
-    with patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _record_span(client, {"model": "m", "messages": []}, result, 0.1)
-            assert any("failed to record" in str(warning.message).lower() for warning in w)
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        _record_span(client, {"model": "m", "messages": []}, result, 0.1)
+        assert any("failed to record" in str(warning.message).lower() for warning in w)
 
 
 # ---------------------------------------------------------------------------
@@ -417,12 +417,14 @@ def test_wrap_sync_stream_span_setup_exception_warns() -> None:
 
     client = _make_client()
 
-    with patch("trulayer.trace.current_trace", side_effect=RuntimeError("kaboom")):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            gen = _wrap_sync_stream(client, {}, iter([]), 0.0)
-            list(gen)
-            assert any("streaming" in str(warning.message).lower() for warning in w)
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("kaboom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        gen = _wrap_sync_stream(client, {}, iter([]), 0.0)
+        list(gen)
+        assert any("streaming" in str(warning.message).lower() for warning in w)
 
 
 # ---------------------------------------------------------------------------
@@ -441,17 +443,16 @@ async def test_wrap_async_stream_exception_warns() -> None:
         yield _make_content_delta_event("partial")
         raise RuntimeError("async stream error")
 
-    with TraceContext(client, name="t"):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            async for _ in _wrap_async_stream(
-                client,
-                {"model": "claude-3", "messages": [{"content": "q"}]},
-                _bad_async_events(),
-                0.0,
-            ):
-                pass
-            assert any("async streaming" in str(warning.message).lower() for warning in w)
+    with TraceContext(client, name="t"), warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        async for _ in _wrap_async_stream(
+            client,
+            {"model": "claude-3", "messages": [{"content": "q"}]},
+            _bad_async_events(),
+            0.0,
+        ):
+            pass
+        assert any("async streaming" in str(warning.message).lower() for warning in w)
 
 
 @pytest.mark.asyncio
@@ -465,9 +466,11 @@ async def test_wrap_async_stream_span_setup_exception_warns() -> None:
         return
         yield  # make it a generator
 
-    with patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            async for _ in _wrap_async_stream(client, {}, _empty(), 0.0):
-                pass
-            assert any("async streaming" in str(warning.message).lower() for warning in w)
+    with (
+        patch("trulayer.trace.current_trace", side_effect=RuntimeError("boom")),
+        warnings.catch_warnings(record=True) as w,
+    ):
+        warnings.simplefilter("always")
+        async for _ in _wrap_async_stream(client, {}, _empty(), 0.0):
+            pass
+        assert any("async streaming" in str(warning.message).lower() for warning in w)
