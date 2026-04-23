@@ -96,6 +96,39 @@ trulayer.init(
 )
 ```
 
+## Error Handling
+
+The SDK is fire-and-forget: transient HTTP failures are retried with exponential backoff (up to 3 attempts) and eventually surfaced via `warnings.warn`. User code is never interrupted by network errors.
+
+One failure mode is **non-retryable** and surfaced as a typed exception: if the TruLayer API responds with HTTP 401 and an error code of `invalid_api_key` or `api_key_expired`, the SDK:
+
+- Raises `InvalidAPIKeyError` internally (no retries, no backoff).
+- Drops all queued traces and rejects subsequent `enqueue` calls on that client instance.
+- Emits a single `UserWarning` identifying the failure.
+
+These are permanent configuration errors — retrying cannot succeed, so the SDK halts to avoid wasting requests.
+
+```python
+import sys
+import trulayer
+from trulayer import InvalidAPIKeyError
+
+tl = trulayer.init(api_key="tl_...", project_name="my-project")
+
+# Recommended: fail fast at startup with a lightweight probe trace.
+try:
+    with tl.trace("startup-probe"):
+        pass
+    tl.flush()
+    if tl._batch.fatal_error is not None:
+        raise tl._batch.fatal_error
+except InvalidAPIKeyError as err:
+    print(err, file=sys.stderr)  # "API key is invalid or has expired — check your configuration."
+    sys.exit(1)
+```
+
+`InvalidAPIKeyError` exposes a `code` attribute (`"invalid_api_key"` or `"api_key_expired"`) for programmatic handling and subclasses `TruLayerError` (also exported).
+
 ## Tech Stack
 
 - Python 3.11+

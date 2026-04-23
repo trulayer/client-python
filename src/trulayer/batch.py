@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from trulayer.errors import InvalidAPIKeyError, parse_invalid_api_key_payload
+
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
@@ -37,25 +39,41 @@ class BatchSender:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        # Latched when the API reports a permanent credential failure. Once
+        # set, the sender drops all queued and future events — retrying would
+        # waste the backend's time and cannot succeed.
+        self._fatal_error: InvalidAPIKeyError | None = None
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, daemon=True, name="trulayer-batch")
         self._thread.start()
 
     def enqueue(self, item: dict[str, Any]) -> None:
+        if self._fatal_error is not None:
+            return
         self._queue.put_nowait(item)
         if self._queue.qsize() >= self._batch_size and self._loop:
             asyncio.run_coroutine_threadsafe(self._flush(), self._loop)
 
     def shutdown(self, timeout: float = 5.0) -> None:
         if self._loop and self._thread and self._thread.is_alive():
-            future = asyncio.run_coroutine_threadsafe(self._flush(), self._loop)
-            try:
-                future.result(timeout=timeout)
-            except Exception as exc:
-                warnings.warn(f"trulayer: flush on shutdown failed: {exc}", stacklevel=2)
+            if self._fatal_error is None:
+                future = asyncio.run_coroutine_threadsafe(self._flush(), self._loop)
+                try:
+                    future.result(timeout=timeout)
+                except Exception as exc:
+                    warnings.warn(f"trulayer: flush on shutdown failed: {exc}", stacklevel=2)
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._thread.join(timeout=timeout)
+
+    @property
+    def fatal_error(self) -> InvalidAPIKeyError | None:
+        """The latched non-retryable error, if any.
+
+        Exposed for tests and for callers that want to surface configuration
+        failures proactively.
+        """
+        return self._fatal_error
 
     def _run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -70,9 +88,15 @@ class BatchSender:
     async def _flush_loop(self) -> None:
         while True:
             await asyncio.sleep(self._flush_interval)
+            if self._fatal_error is not None:
+                # Nothing more to do — keep the loop alive so shutdown() can stop it cleanly.
+                continue
             await self._flush()
 
     async def _flush(self) -> None:
+        if self._fatal_error is not None:
+            self._drain_queue()
+            return
         items: list[dict[str, Any]] = []
         while True:
             try:
@@ -83,6 +107,13 @@ class BatchSender:
             return
         await self._send_with_retry(items)
 
+    def _drain_queue(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
     async def _send_with_retry(self, items: list[dict[str, Any]]) -> None:
         for attempt in range(_MAX_RETRIES):
             try:
@@ -92,6 +123,22 @@ class BatchSender:
                         json={"traces": items},
                         headers={"Authorization": f"Bearer {self._api_key}"},
                     )
+                    if resp.status_code == 401:
+                        payload: Any = None
+                        try:
+                            payload = resp.json()
+                        except Exception:
+                            payload = None
+                        code = parse_invalid_api_key_payload(payload)
+                        if code is not None:
+                            self._fatal_error = InvalidAPIKeyError(code)
+                            self._drain_queue()
+                            warnings.warn(
+                                f"trulayer: {self._fatal_error} (code: {code}) "
+                                f"— halting trace submission for this client.",
+                                stacklevel=2,
+                            )
+                            return
                     resp.raise_for_status()
                     return
             except Exception as exc:
