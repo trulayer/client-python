@@ -47,7 +47,7 @@ def test_record_span_inside_trace() -> None:
     payload = client._batch.enqueue.call_args[0][0]
     span = payload["spans"][0]
     assert span["name"] == "anthropic.messages"
-    assert span["span_type"] == "llm"
+    assert span["type"] == "llm"
     assert span["input"] == "prompt"
     assert span["output"] == "response text"
     assert span["model"] == "claude-haiku-4-5-20251001"

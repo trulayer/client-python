@@ -140,6 +140,46 @@ class TruLayerClient:
         except Exception as exc:
             warnings.warn(f"trulayer: feedback submission failed: {exc}", stacklevel=2)
 
+    def eval(
+        self,
+        trace_id: str,
+        evaluator_type: str,
+        metric_name: str,
+    ) -> str | None:
+        """Trigger an evaluation for a previously ingested trace.
+
+        Sends ``POST /v1/eval`` with ``{trace_id, evaluator_type, metric_name}``
+        and returns the backend-assigned eval ID on success, or ``None`` if the
+        request fails. Fire-and-forget — this method never raises into user
+        code; failures are surfaced via ``warnings.warn``.
+
+        Args:
+            trace_id: UUID of the trace to evaluate.
+            evaluator_type: Evaluator kind (e.g. ``"llm"`` or ``"rule"``).
+            metric_name: Name of the metric to compute.
+
+        Returns:
+            The eval ID assigned by the server, or ``None`` on failure.
+        """
+        try:
+            resp = httpx.post(
+                f"{self._endpoint}/v1/eval",
+                json={
+                    "trace_id": trace_id,
+                    "evaluator_type": evaluator_type,
+                    "metric_name": metric_name,
+                },
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                timeout=5.0,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            eval_id = body.get("eval_id") if isinstance(body, dict) else None
+            return eval_id if isinstance(eval_id, str) else None
+        except Exception as exc:
+            warnings.warn(f"trulayer: eval trigger failed: {exc}", stacklevel=2)
+            return None
+
     def flush(self, timeout: float = 5.0) -> None:
         """Flush buffered events. Blocks until complete or timeout."""
         self._batch.shutdown(timeout=timeout)

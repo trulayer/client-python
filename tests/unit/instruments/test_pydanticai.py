@@ -100,7 +100,7 @@ async def test_instrument_pydanticai_async_run() -> None:
 
     assert result.data == "Paris"
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     span = agent_spans[0]
     assert span["name"] == "pydanticai:test-agent"
@@ -124,7 +124,7 @@ def test_instrument_pydanticai_sync_run() -> None:
 
     assert result.data == "Paris"
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     span = agent_spans[0]
     assert span["name"] == "pydanticai:test-agent"
@@ -149,7 +149,7 @@ async def test_stream_run_span_captured() -> None:
 
     assert "".join(collected) == "Paris"
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     span = agent_spans[0]
     assert span["input"] == "stream prompt"
@@ -169,7 +169,7 @@ async def test_capture_input_false() -> None:
         await agent.run("secret prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["input"] is None
 
@@ -187,7 +187,7 @@ async def test_capture_output_false() -> None:
         await agent.run("prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["output"] is None
 
@@ -205,7 +205,7 @@ async def test_run_name_override() -> None:
         await agent.run("prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["name"] == "my-custom-agent"
 
@@ -232,7 +232,7 @@ async def test_tool_call_child_span() -> None:
 
     assert result == "sunny"
     spans = _get_spans(client)
-    tool_spans = [s for s in spans if s["span_type"] == "tool"]
+    tool_spans = [s for s in spans if s["type"] == "tool"]
     assert len(tool_spans) == 1
     assert tool_spans[0]["name"] == "get_weather"
     assert "London" in tool_spans[0]["input"]
@@ -260,10 +260,10 @@ async def test_exception_propagates() -> None:
         await agent.run("prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["metadata"]["error"] == "model exploded"
-    assert agent_spans[0]["error"] is True
+    assert isinstance(agent_spans[0]["error"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -314,10 +314,10 @@ def test_run_sync_exception_propagates() -> None:
         agent.run_sync("prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["metadata"]["error"] == "sync exploded"
-    assert agent_spans[0]["error"] is True
+    assert isinstance(agent_spans[0]["error"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +344,7 @@ def test_run_sync_usage_exception_swallowed() -> None:
 
     assert result.data == "Paris"
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
 
 
@@ -370,10 +370,10 @@ async def test_run_stream_exception_propagates() -> None:
         await agent.run_stream("prompt")
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["metadata"]["error"] == "stream setup failed"
-    assert agent_spans[0]["error"] is True
+    assert isinstance(agent_spans[0]["error"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +399,7 @@ async def test_stream_iter_no_stream_response_attribute() -> None:
 
     assert isinstance(stream_result, NoStreamResponseResult)
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
 
 
@@ -430,10 +430,10 @@ async def test_stream_iter_exception_in_stream_response() -> None:
                 pass
 
     spans = _get_spans(client)
-    agent_spans = [s for s in spans if s["span_type"] == "agent"]
+    agent_spans = [s for s in spans if s["type"] == "agent"]
     assert len(agent_spans) == 1
     assert agent_spans[0]["metadata"]["error"] == "stream broke"
-    assert agent_spans[0]["error"] is True
+    assert isinstance(agent_spans[0]["error"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -458,7 +458,7 @@ async def test_tool_call_no_kwargs() -> None:
 
     assert result == "done"
     spans = _get_spans(client)
-    tool_spans = [s for s in spans if s["span_type"] == "tool"]
+    tool_spans = [s for s in spans if s["type"] == "tool"]
     assert len(tool_spans) == 1
     assert tool_spans[0]["input"] is None
 
@@ -487,7 +487,7 @@ async def test_tool_call_exception_propagates() -> None:
         await tool_fn(x=5)
 
     spans = _get_spans(client)
-    tool_spans = [s for s in spans if s["span_type"] == "tool"]
+    tool_spans = [s for s in spans if s["type"] == "tool"]
     assert len(tool_spans) == 1
     assert tool_spans[0]["metadata"]["error"] == "tool broke"
-    assert tool_spans[0]["error"] is True
+    assert isinstance(tool_spans[0]["error"], str)

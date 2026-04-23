@@ -42,7 +42,7 @@ def test_record_span_inside_trace() -> None:
     payload = client._batch.enqueue.call_args[0][0]
     span = payload["spans"][0]
     assert span["name"] == "openai.chat"
-    assert span["span_type"] == "llm"
+    assert span["type"] == "llm"
     assert span["input"] == "hi"
     assert span["output"] == "world"
     assert span["model"] == "gpt-4o"

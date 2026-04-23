@@ -91,7 +91,7 @@ def test_generate_reply_creates_child_span() -> None:
     spans = _get_spans(client)
     reply_spans = [s for s in spans if s["name"] == "autogen:assistant:reply"]
     assert len(reply_spans) == 1
-    assert reply_spans[0]["span_type"] == "llm"
+    assert reply_spans[0]["type"] == "llm"
     assert "Hi" in reply_spans[0]["input"]
     assert reply_spans[0]["output"] == "I can help with that."
 

@@ -39,7 +39,9 @@ def test_trace_records_exception() -> None:
     with pytest.raises(ValueError), TraceContext(client):
         raise ValueError("boom")
     payload = client._batch.enqueue.call_args[0][0]
-    assert payload["error"] is True
+    # Wire format collapses (error bool, error_message) into error: string | null
+    assert isinstance(payload["error"], str)
+    assert "ValueError" in payload["error"]
 
 
 def test_span_captures_latency_and_output() -> None:
@@ -65,8 +67,10 @@ def test_span_records_exception() -> None:
         raise RuntimeError("span error")
 
     payload = client._batch.enqueue.call_args[0][0]
-    assert payload["spans"][0]["error"] is True
-    assert "RuntimeError" in payload["spans"][0]["error_message"]
+    # Wire format: span error is a string carrying the message, or null.
+    assert isinstance(payload["spans"][0]["error"], str)
+    assert "RuntimeError" in payload["spans"][0]["error"]
+    assert "error_message" not in payload["spans"][0]
 
 
 def test_nested_spans() -> None:
@@ -166,20 +170,20 @@ def test_scrub_payload_scrubs_trace_fields() -> None:
     payload: dict[str, object] = {
         "input": "my email is foo@bar.com",
         "output": "secret",
-        "error_message": None,
+        "error": None,
         "spans": [],
     }
     result = _scrub_payload(payload, lambda s: s.replace("foo@bar.com", "[REDACTED]"))
     assert result["input"] == "my email is [REDACTED]"
     assert result["output"] == "secret"
-    assert result["error_message"] is None
+    assert result["error"] is None
 
 
 def test_scrub_payload_scrubs_span_fields() -> None:
     payload = {
         "input": "clean",
         "spans": [
-            {"input": "user: foo@bar.com", "output": "assistant reply", "error_message": None},
+            {"input": "user: foo@bar.com", "output": "assistant reply", "error": None},
         ],
     }
     result = _scrub_payload(payload, lambda s: "[SCRUBBED]" if "foo@bar.com" in s else s)

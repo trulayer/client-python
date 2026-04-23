@@ -1,13 +1,12 @@
 """Wire-shape contract tests.
 
 These tests verify the exact JSON payload the SDK produces before it reaches
-the network layer.  They use LocalBatchSender or mock senders so no real HTTP
-request is made.
+the network layer. They use LocalBatchSender (via ``create_test_client``) or
+mock senders so no real HTTP request is made.
 
-FINDINGS DOCUMENTED AS ASSERTIONS — tests marked with 'KNOWN:' reflect known
-divergences between the SDK and the backend OpenAPI spec (SpanRequest).
-Engineers must fix the underlying production code; these tests serve as
-regression anchors so the fix is verifiable.
+The assertions here are the contract between the SDK and the TruLayer
+ingestion API. Any change that alters the wire format must update these
+tests in the same change.
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ import pytest
 import respx
 
 from trulayer.client import TruLayerClient
-from trulayer.model import TraceData
+from trulayer.model import SpanData, TraceData
 from trulayer.testing import create_test_client
 
 # ---------------------------------------------------------------------------
@@ -52,14 +51,26 @@ class TestTraceWireShape:
         assert isinstance(p["metadata"], dict)
         assert isinstance(p["started_at"], str)
 
-    def test_trace_marks_error_on_exception(self) -> None:
+    def test_trace_error_field_is_null_on_success(self) -> None:
+        """Spec: ``TraceRequest.error`` is ``string | null``; null when no error."""
         client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(ValueError), client.trace("err-trace"):
-            raise ValueError("boom")
+        with client.trace("happy"):
+            pass
 
-        traces = sender.traces
-        assert len(traces) == 1
-        assert traces[0]["error"] is True
+        p = sender.traces[0]
+        assert p["error"] is None
+
+    def test_trace_error_field_is_string_on_exception(self) -> None:
+        """Spec: ``TraceRequest.error`` carries the error message string on failure."""
+        client, sender = create_test_client(project_name="proj-wire")
+        with pytest.raises(RuntimeError), client.trace("err-trace"):
+            raise RuntimeError("something broke")
+
+        p = sender.traces[0]
+        assert isinstance(p["error"], str)
+        assert "something broke" in p["error"]
+        # The legacy separate boolean+message pair must not appear on the wire.
+        assert "error_message" not in p
 
     def test_session_id_and_external_id_populated(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
@@ -103,19 +114,6 @@ class TestTraceWireShape:
         assert isinstance(lms, int)
         assert lms >= 0
 
-    # KNOWN: TraceRequest.error is string | null in the spec (error message).
-    # The SDK sends error: bool.  This test documents current SDK behaviour.
-    def test_known_error_field_is_boolean_not_string(self) -> None:
-        client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(RuntimeError), client.trace("err-bool"):
-            raise RuntimeError("spec says string, sdk sends bool")
-
-        p = sender.traces[0]
-        # Current SDK sends boolean
-        assert isinstance(p["error"], bool)
-        assert p["error"] is True
-        # The error message is NOT captured at the trace level in the current SDK
-
 
 # ---------------------------------------------------------------------------
 # Span payload shape
@@ -145,66 +143,102 @@ class TestSpanWireShape:
         assert isinstance(sp["latency_ms"], int)
         assert sp["latency_ms"] >= 0
 
-    def test_span_error_set_on_exception(self) -> None:
+    def test_span_error_is_string_on_exception(self) -> None:
+        """Spec: span ``error`` carries the formatted traceback / message."""
         client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(ValueError), client.trace("span-err") as t, t.span("bad-span"):
+        with (
+            pytest.raises(ValueError),
+            client.trace("span-err") as t,
+            t.span("bad-span"),
+        ):
             raise ValueError("span failed")
 
         spans = sender.traces[0]["spans"]
         assert len(spans) == 1
         sp = spans[0]
-        assert sp["error"] is True
-        assert "span failed" in (sp["error_message"] or "")
+        assert isinstance(sp["error"], str)
+        assert "span failed" in sp["error"]
+        assert "error_message" not in sp
 
-    # KNOWN: SpanRequest.type field name in spec vs span_type in SDK.
-    # The backend OpenAPI SpanRequest schema uses `type`; the SDK sends
-    # `span_type`.  This test documents current SDK behaviour.
-    def test_known_span_field_is_span_type_not_type(self) -> None:
+    def test_span_error_is_null_on_success(self) -> None:
+        """Spec: span ``error`` is ``null`` when the span succeeds."""
+        client, sender = create_test_client(project_name="proj-wire")
+        with client.trace("ok") as t, t.span("s"):
+            pass
+
+        sp = sender.traces[0]["spans"][0]
+        assert sp["error"] is None
+
+    def test_span_field_is_type_not_span_type(self) -> None:
+        """Spec: ``SpanRequest.type`` — the SDK serializes the Python attribute
+        ``span_type`` as ``type`` on the wire.
+        """
         client, sender = create_test_client(project_name="proj-wire")
         with client.trace("field-name") as t, t.span("s", span_type="llm"):
             pass
 
         sp = sender.traces[0]["spans"][0]
-        # SDK serialises to span_type
-        assert "span_type" in sp
-        assert "type" not in sp
+        assert sp["type"] == "llm"
+        assert "span_type" not in sp
 
-    # KNOWN: SpanRequest.start_time / end_time (spec) vs started_at / ended_at (SDK).
-    def test_known_span_timestamps_use_started_at_ended_at(self) -> None:
+    def test_span_timestamps_use_start_time_end_time(self) -> None:
+        """Spec: ``SpanRequest.start_time`` / ``end_time`` — the SDK serializes
+        ``started_at`` → ``start_time`` and ``ended_at`` → ``end_time``.
+        """
         client, sender = create_test_client(project_name="proj-wire")
         with client.trace("ts-fields") as t, t.span("s"):
             pass
 
         sp = sender.traces[0]["spans"][0]
-        assert "started_at" in sp
-        assert "ended_at" in sp
-        assert "start_time" not in sp
-        assert "end_time" not in sp
+        assert "start_time" in sp
+        assert "end_time" in sp
+        assert isinstance(sp["start_time"], str)
+        assert "started_at" not in sp
+        assert "ended_at" not in sp
 
-    # KNOWN: SpanType enum mismatch.
-    # Spec enum: [llm, tool, retrieval, other]
-    # SDK accepts: any string — common values are llm, tool, retrieval, chain, default.
-    def test_known_span_type_chain_and_default_are_producible(self) -> None:
-        client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("enum-test") as t:
-            with t.span("chain-span", span_type="chain"):
-                pass
-            with t.span("default-span", span_type="default"):
-                pass
 
-        types = [sp["span_type"] for sp in sender.traces[0]["spans"]]
-        assert "chain" in types
-        assert "default" in types
-        # 'other' (spec-only) is not enforced by the SDK
+# ---------------------------------------------------------------------------
+# Model-level serialization (unit coverage for to_wire)
+# ---------------------------------------------------------------------------
 
-    # KNOWN: SpanRequest.cost field exists in spec but SpanData has no cost.
-    def test_known_span_has_no_cost_field(self) -> None:
-        client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("cost-check") as t, t.span("s"):
-            pass
 
-        sp = sender.traces[0]["spans"][0]
-        assert "cost" not in sp
+class TestModelToWire:
+    def test_span_to_wire_field_names(self) -> None:
+        span = SpanData(
+            trace_id="trace-1",
+            name="op",
+            span_type="llm",
+            error=True,
+            error_message="boom",
+        )
+        wire = span.to_wire()
+        assert wire["type"] == "llm"
+        assert wire["start_time"]
+        assert "end_time" in wire
+        assert wire["error"] == "boom"
+        assert "span_type" not in wire
+        assert "error_message" not in wire
+        assert "started_at" not in wire
+        assert "ended_at" not in wire
+
+    def test_span_to_wire_error_null_when_no_error(self) -> None:
+        span = SpanData(trace_id="trace-1", name="op", span_type="llm")
+        wire = span.to_wire()
+        assert wire["error"] is None
+
+    def test_trace_to_wire_collapses_error_fields(self) -> None:
+        trace = TraceData(
+            project_id="p",
+            error=True,
+            error_message="fatal",
+            spans=[SpanData(name="s", span_type="tool")],
+        )
+        wire = trace.to_wire()
+        assert wire["error"] == "fatal"
+        assert "error_message" not in wire
+        # Nested spans use the wire-shape too
+        assert wire["spans"][0]["type"] == "tool"
+        assert "span_type" not in wire["spans"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -213,12 +247,7 @@ class TestSpanWireShape:
 
 
 class TestBatchSenderWireFormat:
-    """Verify the exact JSON body the BatchSender would POST.
-
-    The BatchSender runs in a background thread, making real-network assertions
-    timing-sensitive.  Instead we call _send_with_retry directly with a
-    respx-mocked httpx client.
-    """
+    """Verify the exact JSON body the BatchSender would POST."""
 
     @pytest.mark.asyncio
     @respx.mock
@@ -234,7 +263,7 @@ class TestBatchSenderWireFormat:
             endpoint="https://api.trulayer.ai",
         )
         trace = TraceData(project_id="proj-1")
-        await sender._send_with_retry([trace.model_dump(mode="json")])
+        await sender._send_with_retry([trace.to_wire()])
 
         assert route.called
         body = json.loads(route.calls.last.request.content)
@@ -256,7 +285,7 @@ class TestBatchSenderWireFormat:
             endpoint="https://api.trulayer.ai",
         )
         trace = TraceData(project_id="proj-1")
-        await sender._send_with_retry([trace.model_dump(mode="json")])
+        await sender._send_with_retry([trace.to_wire()])
 
         request = route.calls.last.request
         assert request.headers["authorization"] == "Bearer tl_secret"
@@ -275,7 +304,7 @@ class TestBatchSenderWireFormat:
             endpoint="https://api.trulayer.ai",
         )
         trace = TraceData(project_id="proj-1")
-        await sender._send_with_retry([trace.model_dump(mode="json")])
+        await sender._send_with_retry([trace.to_wire()])
 
         request = route.calls.last.request
         assert "application/json" in request.headers["content-type"]
@@ -294,7 +323,7 @@ class TestBatchSenderWireFormat:
             endpoint="https://api.trulayer.ai",
         )
         trace = TraceData(project_id="proj-1")
-        await sender._send_with_retry([trace.model_dump(mode="json")])
+        await sender._send_with_retry([trace.to_wire()])
 
         assert route.called
         assert "/v1/ingest/batch" in str(route.calls.last.request.url)
@@ -377,18 +406,75 @@ class TestFeedbackWireShape:
 
 
 # ---------------------------------------------------------------------------
-# Eval endpoint — SDK surface gap
+# Eval endpoint
 # ---------------------------------------------------------------------------
 
 
-class TestEvalSurfaceGap:
-    # SPEC GAP: POST /v1/eval (EvalTriggerRequest) is not exposed by the SDK.
-    # Neither TruLayerClient nor any public helper sends to /v1/eval.
-    # This test documents the absence so the gap is explicit and tracked.
-    def test_eval_method_absent_from_client(self) -> None:
+class TestEvalWireShape:
+    @respx.mock
+    def test_eval_method_exists(self) -> None:
         with patch("trulayer.batch.BatchSender.start"):
             client = TruLayerClient(api_key="tl_test", project_name="p")
-        assert not hasattr(client, "eval"), (
-            "TruLayerClient.eval() method does not exist — POST /v1/eval is not "
-            "accessible via the Python SDK. Engineers must add this method."
+        assert hasattr(client, "eval")
+        assert callable(client.eval)
+
+    @respx.mock
+    def test_eval_posts_to_v1_eval_endpoint(self) -> None:
+        route = respx.post("https://api.trulayer.ai/v1/eval").mock(
+            return_value=httpx.Response(
+                202,
+                json={"eval_id": "eval-abc", "status": "pending"},
+            )
         )
+        with patch("trulayer.batch.BatchSender.start"):
+            client = TruLayerClient(api_key="tl_test", project_name="p")
+        eval_id = client.eval(
+            trace_id="trace-xyz",
+            evaluator_type="llm",
+            metric_name="correctness",
+        )
+        assert route.called
+        assert eval_id == "eval-abc"
+
+    @respx.mock
+    def test_eval_body_shape(self) -> None:
+        route = respx.post("https://api.trulayer.ai/v1/eval").mock(
+            return_value=httpx.Response(
+                202,
+                json={"eval_id": "eval-123", "status": "pending"},
+            )
+        )
+        with patch("trulayer.batch.BatchSender.start"):
+            client = TruLayerClient(api_key="tl_test", project_name="p")
+        client.eval(
+            trace_id="trace-1",
+            evaluator_type="rule",
+            metric_name="length",
+        )
+        body = json.loads(route.calls.last.request.content)
+        assert body == {
+            "trace_id": "trace-1",
+            "evaluator_type": "rule",
+            "metric_name": "length",
+        }
+
+    @respx.mock
+    def test_eval_sends_authorization_header(self) -> None:
+        route = respx.post("https://api.trulayer.ai/v1/eval").mock(
+            return_value=httpx.Response(202, json={"eval_id": "e1", "status": "pending"})
+        )
+        with patch("trulayer.batch.BatchSender.start"):
+            client = TruLayerClient(api_key="tl_mykey", project_name="p")
+        client.eval(trace_id="t", evaluator_type="llm", metric_name="m")
+        assert route.calls.last.request.headers["authorization"] == "Bearer tl_mykey"
+
+    @respx.mock
+    def test_eval_returns_none_on_error_and_does_not_raise(self) -> None:
+        respx.post("https://api.trulayer.ai/v1/eval").mock(return_value=httpx.Response(404))
+        with patch("trulayer.batch.BatchSender.start"):
+            client = TruLayerClient(api_key="tl_test", project_name="p")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = client.eval(trace_id="t", evaluator_type="llm", metric_name="m")
+        assert result is None
+        assert any("eval" in str(w.message).lower() for w in caught)
