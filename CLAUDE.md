@@ -42,6 +42,10 @@ A task is **not done** until all of the following are true — in order:
 
 Every pull request must pass CI before it can be merged. If CI fails, the engineer who opened the PR owns the fix — not a reviewer, not a follow-up task. Don't merge with failing CI. Don't bypass with `--admin` or `--no-verify`. If a check is flaky, fix it or remove it — don't skip it.
 
+## Shell Conventions
+
+**Never use `cd <path> && git <command>`** — use `git -C <path> <command>` instead. The `cd` form triggers a Claude Code safety prompt that interrupts automated work.
+
 ## Key Commands
 
 ```bash
