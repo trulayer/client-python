@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from trulayer.client import TruLayerClient
+from trulayer.errors import InvalidAPIKeyError, TruLayerError
 from trulayer.instruments.anthropic import instrument_anthropic, uninstrument_anthropic
 from trulayer.instruments.autogen import instrument_autogen
 from trulayer.instruments.crewai import instrument_crewai
@@ -116,4 +117,6 @@ __all__ = [
     "Rule",
     "redact",
     "BUILTIN_PACKS",
+    "InvalidAPIKeyError",
+    "TruLayerError",
 ]

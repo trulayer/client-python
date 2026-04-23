@@ -50,6 +50,7 @@ Track implementation progress for the TruLayer AI Python SDK.
 - [x] `atexit` shutdown hook with 5s drain timeout
 - [x] HTTP retry with exponential backoff (3 retries)
 - [x] Drop + warn on max retries exceeded (never raise)
+- [x] Non-retryable 401 handling — raise `InvalidAPIKeyError` on `invalid_api_key` / `api_key_expired`, halt queue
 
 ### Auto-Instrumentation
 
