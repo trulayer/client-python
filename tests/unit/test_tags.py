@@ -7,6 +7,7 @@ the legacy string-array ``tags`` on the wire.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 from trulayer.trace import TraceContext
@@ -22,7 +23,7 @@ def _make_client(project_id: str = "proj-tags", sample_rate: float = 1.0) -> Mag
     return client
 
 
-def _captured_payload(client: MagicMock) -> dict:
+def _captured_payload(client: MagicMock) -> dict[str, Any]:
     return client._batch.enqueue.call_args[0][0]
 
 
