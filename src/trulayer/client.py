@@ -103,6 +103,7 @@ class TruLayerClient:
         external_id: str | None = None,
         tags: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
+        tag_map: dict[str, str] | None = None,
     ) -> TraceContext:
         return TraceContext(
             self,
@@ -111,6 +112,7 @@ class TruLayerClient:
             external_id=external_id,
             tags=tags,
             metadata=metadata,
+            tag_map=tag_map,
         )
 
     def feedback(
