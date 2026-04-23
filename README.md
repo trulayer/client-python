@@ -1,6 +1,13 @@
 # TruLayer AI — Python SDK
 
+> **Status: Alpha.** APIs are pre-`1.0.0` and may change between minor releases.
+> Pin a specific version in production until `1.0.0` ships.
+
 Python SDK for instrumenting AI applications and sending traces to TruLayer AI.
+
+- Documentation: https://docs.trulayer.ai
+- Source: https://github.com/trulayer/client-python
+- Issues: https://github.com/trulayer/client-python/issues
 
 ## Installation
 
