@@ -82,6 +82,11 @@ class TraceData(BaseModel):
     error: bool = False
     error_message: str | None = None
     tags: list[str] = Field(default_factory=list)
+    # Optional structured key -> value tags. When non-empty, emitted as the
+    # ``tags`` wire field (object form) and takes precedence over the legacy
+    # string-array ``tags``. Enables server-side filtering by tag key/value
+    # pair on list endpoints. Limits: max 20 keys, 64 chars per key/value.
+    tag_map: dict[str, str] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     spans: list[SpanData] = Field(default_factory=list)
     started_at: datetime = Field(default_factory=_now)
@@ -91,9 +96,16 @@ class TraceData(BaseModel):
         """Serialize this trace (and nested spans) to the JSON shape expected
         by ``POST /v1/ingest`` / ``POST /v1/ingest/batch``.
         """
-        payload = self.model_dump(mode="json", by_alias=True, exclude={"spans", "error_message"})
+        payload = self.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude={"spans", "error_message", "tag_map"},
+        )
         payload["error"] = self.error_message if self.error else None
         payload["spans"] = [s.to_wire() for s in self.spans]
+        # A non-empty tag map wins over the legacy string-array on the wire.
+        if self.tag_map:
+            payload["tags"] = dict(self.tag_map)
         return payload
 
 

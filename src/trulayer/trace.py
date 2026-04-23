@@ -129,6 +129,7 @@ class TraceContext:
         external_id: str | None = None,
         tags: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
+        tag_map: dict[str, str] | None = None,
     ) -> None:
         self._client = client
         self._data = TraceData(
@@ -137,6 +138,7 @@ class TraceContext:
             session_id=session_id,
             external_id=external_id,
             tags=tags or [],
+            tag_map=dict(tag_map) if tag_map is not None else None,
             metadata=metadata or {},
         )
         self._start_ns = 0
@@ -163,6 +165,20 @@ class TraceContext:
 
     def add_tag(self, tag: str) -> None:
         self._data.tags.append(tag)
+
+    def set_tag(self, key: str, value: str) -> None:
+        """Attach a structured key -> value tag to the trace.
+
+        Unlike :meth:`add_tag`, these are indexed server-side and filterable
+        via the ``tag_key`` / ``tag_value`` parameters on list endpoints.
+
+        Limits: max 20 keys per trace, 64 characters per key and value.
+        Values exceeding these limits are accepted client-side and rejected
+        by the server with a 400 response.
+        """
+        if self._data.tag_map is None:
+            self._data.tag_map = {}
+        self._data.tag_map[key] = value
 
     def __enter__(self) -> TraceContext:
         try:
