@@ -9,11 +9,11 @@ divergences between the SDK and the backend OpenAPI spec (SpanRequest).
 Engineers must fix the underlying production code; these tests serve as
 regression anchors so the fix is verifiable.
 """
+
 from __future__ import annotations
 
 import json
 import warnings
-from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -21,10 +21,8 @@ import pytest
 import respx
 
 from trulayer.client import TruLayerClient
-from trulayer.local_batch import LocalBatchSender
 from trulayer.model import TraceData
 from trulayer.testing import create_test_client
-
 
 # ---------------------------------------------------------------------------
 # Trace payload shape
@@ -56,9 +54,8 @@ class TestTraceWireShape:
 
     def test_trace_marks_error_on_exception(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(ValueError):
-            with client.trace("err-trace"):
-                raise ValueError("boom")
+        with pytest.raises(ValueError), client.trace("err-trace"):
+            raise ValueError("boom")
 
         traces = sender.traces
         assert len(traces) == 1
@@ -110,9 +107,8 @@ class TestTraceWireShape:
     # The SDK sends error: bool.  This test documents current SDK behaviour.
     def test_known_error_field_is_boolean_not_string(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(RuntimeError):
-            with client.trace("err-bool"):
-                raise RuntimeError("spec says string, sdk sends bool")
+        with pytest.raises(RuntimeError), client.trace("err-bool"):
+            raise RuntimeError("spec says string, sdk sends bool")
 
         p = sender.traces[0]
         # Current SDK sends boolean
@@ -129,12 +125,11 @@ class TestTraceWireShape:
 class TestSpanWireShape:
     def test_span_included_in_trace_spans_array(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("with-span") as t:
-            with t.span("llm-call", span_type="llm") as s:
-                s.set_input("prompt")
-                s.set_output("answer")
-                s.set_model("gpt-4o")
-                s.set_tokens(prompt=10, completion=5)
+        with client.trace("with-span") as t, t.span("llm-call", span_type="llm") as s:
+            s.set_input("prompt")
+            s.set_output("answer")
+            s.set_model("gpt-4o")
+            s.set_tokens(prompt=10, completion=5)
 
         trace_payload = sender.traces[0]
         spans = trace_payload["spans"]
@@ -152,10 +147,8 @@ class TestSpanWireShape:
 
     def test_span_error_set_on_exception(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with pytest.raises(ValueError):
-            with client.trace("span-err") as t:
-                with t.span("bad-span"):
-                    raise ValueError("span failed")
+        with pytest.raises(ValueError), client.trace("span-err") as t, t.span("bad-span"):
+            raise ValueError("span failed")
 
         spans = sender.traces[0]["spans"]
         assert len(spans) == 1
@@ -168,9 +161,8 @@ class TestSpanWireShape:
     # `span_type`.  This test documents current SDK behaviour.
     def test_known_span_field_is_span_type_not_type(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("field-name") as t:
-            with t.span("s", span_type="llm"):
-                pass
+        with client.trace("field-name") as t, t.span("s", span_type="llm"):
+            pass
 
         sp = sender.traces[0]["spans"][0]
         # SDK serialises to span_type
@@ -180,9 +172,8 @@ class TestSpanWireShape:
     # KNOWN: SpanRequest.start_time / end_time (spec) vs started_at / ended_at (SDK).
     def test_known_span_timestamps_use_started_at_ended_at(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("ts-fields") as t:
-            with t.span("s"):
-                pass
+        with client.trace("ts-fields") as t, t.span("s"):
+            pass
 
         sp = sender.traces[0]["spans"][0]
         assert "started_at" in sp
@@ -209,9 +200,8 @@ class TestSpanWireShape:
     # KNOWN: SpanRequest.cost field exists in spec but SpanData has no cost.
     def test_known_span_has_no_cost_field(self) -> None:
         client, sender = create_test_client(project_name="proj-wire")
-        with client.trace("cost-check") as t:
-            with t.span("s"):
-                pass
+        with client.trace("cost-check") as t, t.span("s"):
+            pass
 
         sp = sender.traces[0]["spans"][0]
         assert "cost" not in sp
@@ -365,9 +355,7 @@ class TestFeedbackWireShape:
 
     @respx.mock
     def test_feedback_does_not_raise_on_4xx(self) -> None:
-        respx.post("https://api.trulayer.ai/v1/feedback").mock(
-            return_value=httpx.Response(422)
-        )
+        respx.post("https://api.trulayer.ai/v1/feedback").mock(return_value=httpx.Response(422))
         with patch("trulayer.batch.BatchSender.start"):
             client = TruLayerClient(api_key="tl_test", project_name="p")
         with warnings.catch_warnings(record=True) as caught:
@@ -379,9 +367,7 @@ class TestFeedbackWireShape:
 
     @respx.mock
     def test_feedback_does_not_raise_on_401(self) -> None:
-        respx.post("https://api.trulayer.ai/v1/feedback").mock(
-            return_value=httpx.Response(401)
-        )
+        respx.post("https://api.trulayer.ai/v1/feedback").mock(return_value=httpx.Response(401))
         with patch("trulayer.batch.BatchSender.start"):
             client = TruLayerClient(api_key="tl_test", project_name="p")
         with warnings.catch_warnings(record=True):
