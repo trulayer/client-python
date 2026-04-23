@@ -144,7 +144,7 @@ def test_on_event_end_llm_closes_span_with_output() -> None:
     payload = client._batch.enqueue.call_args[0][0]
     span = payload["spans"][0]
     assert span["name"] == "llamaindex.llm"
-    assert span["span_type"] == "llm"
+    assert span["type"] == "llm"
     assert "prompt" in span["input"]
     assert span["output"] == "the answer is 42"
 
@@ -208,7 +208,7 @@ def test_on_event_end_query_closes_span_with_output() -> None:
     payload = client._batch.enqueue.call_args[0][0]
     span = payload["spans"][0]
     assert span["name"] == "llamaindex.retrieval"
-    assert span["span_type"] == "retrieval"
+    assert span["type"] == "retrieval"
     assert span["input"] == "my query"
     assert span["output"] == "query result"
 

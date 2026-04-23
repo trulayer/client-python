@@ -52,10 +52,9 @@ class TestTraceRequestContract:
     """Verify TraceData serializes to a shape matching the TraceRequest schema."""
 
     def test_trace_data_has_required_fields(self, spec: dict[str, Any]) -> None:
-        """TraceRequest in the spec has no required fields (all optional), but the
-        SDK must produce a valid JSON object with correct field names."""
+        """The wire payload must use only field names defined in TraceRequest."""
         trace = TraceData(project_id="proj-123", name="test-trace")
-        payload = trace.model_dump(mode="json", exclude_none=True)
+        payload = {k: v for k, v in trace.to_wire().items() if v is not None}
 
         # Field names must match what the spec defines
         schema = spec["components"]["schemas"]["TraceRequest"]["properties"]
@@ -71,12 +70,16 @@ class TestTraceRequestContract:
 
     def test_span_data_matches_span_request_schema(self, spec: dict[str, Any]) -> None:
         span = SpanData(name="llm-call", span_type="llm")
-        payload = span.model_dump(mode="json", exclude_none=True)
+        payload = {k: v for k, v in span.to_wire().items() if v is not None}
 
         schema = spec["components"]["schemas"]["SpanRequest"]["properties"]
-        # type field in the SDK is span_type but sent as "type" in the request
-        # Check key fields exist in the spec
-        for key in ("name", "input", "output", "model", "latency_ms"):
+        # The SDK attribute `span_type` must serialize as `type` on the wire.
+        assert "type" in payload
+        assert "span_type" not in payload
+        # Timestamps must use the spec field names.
+        assert "start_time" in payload
+        assert "started_at" not in payload
+        for key in ("name", "input", "output", "model", "latency_ms", "type", "start_time"):
             if key in payload:
                 assert key in schema, f"SDK field '{key}' not in SpanRequest schema"
 

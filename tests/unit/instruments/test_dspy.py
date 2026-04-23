@@ -91,7 +91,7 @@ def test_forward_creates_span_with_input() -> None:
 
         assert result == {"answer": "42"}
         spans = _get_spans(client)
-        llm_spans = [s for s in spans if s["span_type"] == "llm"]
+        llm_spans = [s for s in spans if s["type"] == "llm"]
         assert len(llm_spans) == 1
         assert "Predict" in llm_spans[0]["name"]
         assert "What is 6*7?" in llm_spans[0]["input"]
@@ -115,7 +115,7 @@ def test_forward_records_output() -> None:
             p.forward(question="test")
 
         spans = _get_spans(client)
-        llm_spans = [s for s in spans if s["span_type"] == "llm"]
+        llm_spans = [s for s in spans if s["type"] == "llm"]
         assert len(llm_spans) == 1
         assert "42" in llm_spans[0]["output"]
     finally:
@@ -231,10 +231,10 @@ def test_forward_exception_propagates_and_records_error() -> None:
             assert any("error during DSPy" in str(warning.message) for warning in w)
 
         spans = _get_spans(client)
-        llm_spans = [s for s in spans if s["span_type"] == "llm"]
+        llm_spans = [s for s in spans if s["type"] == "llm"]
         assert len(llm_spans) == 1
         assert llm_spans[0]["metadata"]["error"] == "forward failed"
-        assert llm_spans[0]["error"] is True
+        assert isinstance(llm_spans[0]["error"], str)
     finally:
         uninstrument_dspy()
         _cleanup_fake_dspy()

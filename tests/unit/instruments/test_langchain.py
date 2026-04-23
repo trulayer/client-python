@@ -148,7 +148,7 @@ def test_on_llm_end_records_span_inside_trace() -> None:
     payload = client._batch.enqueue.call_args[0][0]
     span = payload["spans"][0]
     assert span["name"] == "langchain.llm"
-    assert span["span_type"] == "llm"
+    assert span["type"] == "llm"
     assert span["input"] == "what is 2+2?"
     assert span["output"] == "4"
     assert span["model"] == "gpt-4"

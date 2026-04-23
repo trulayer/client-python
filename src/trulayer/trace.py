@@ -23,7 +23,7 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
-_SCRUB_FIELDS = ("input", "output", "error_message")
+_SCRUB_FIELDS = ("input", "output", "error")
 
 
 def _validate_metadata(
@@ -187,13 +187,16 @@ class TraceContext:
             self._data.latency_ms = elapsed // 1_000_000
         if exc_type is not None:
             self._data.error = True
+            self._data.error_message = "".join(
+                traceback.format_exception(exc_type, exc_val, exc_tb)
+            )
         if self._token is not None:
             _current_trace.reset(self._token)
         if not self._sampled:
             return
         # Fire-and-forget: enqueue to batch sender, never raise
         try:
-            payload = self._data.model_dump(mode="json")
+            payload = self._data.to_wire()
             scrub_fn = getattr(self._client, "_scrub_fn", None)
             if scrub_fn is not None:
                 payload = _scrub_payload(payload, scrub_fn)
