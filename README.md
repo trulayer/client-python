@@ -96,6 +96,95 @@ trulayer.init(
 )
 ```
 
+## Failure behavior
+
+The SDK is designed to never block or crash your application when the TruLayer API is unavailable.
+
+**Default behavior — drop + warn:**
+
+- Batches that fail to send are retried up to 3 times with exponential backoff.
+- After retries exhaust, the batch is dropped and a single `UserWarning` is emitted.
+- Within a single failure window, only the **first** drop emits a warning. The latch resets after the next successful send, so a subsequent outage warns exactly once again. Log noise stays bounded during long outages.
+- User code is never blocked and never sees an exception.
+
+**Opt-in block mode — `TRULAYER_FAIL_MODE=block`:**
+
+When set, a flush that still fails after all retries raises `TruLayerFlushError` instead of dropping silently. The underlying exception is available via `__cause__`.
+
+```bash
+export TRULAYER_FAIL_MODE=block
+```
+
+```python
+from trulayer import TruLayerFlushError
+
+try:
+    client.flush()
+except TruLayerFlushError as err:
+    # Handle the outage — e.g. fail a CI job, page on-call, etc.
+    raise SystemExit(f"TruLayer flush failed: {err}") from err
+```
+
+Use block mode for critical paths where losing trace data is worse than failing the request — for example, compliance-logging pipelines or batch jobs that must not complete without confirmed ingestion. It is **not** recommended as a default: in a production hot path, block mode couples your request latency and error rate to the availability of the TruLayer API.
+
+**Zero-network option — `TRULAYER_MODE=local`:**
+
+For unit tests and CI, set `TRULAYER_MODE=local` to capture traces in-memory without any network calls. No API key is required.
+
+```python
+import os
+os.environ["TRULAYER_MODE"] = "local"
+
+client, sender = trulayer.create_test_client(project_name="ci-test")
+with client.trace("my-op"):
+    pass
+client.flush()
+
+assert len(sender.traces) == 1
+```
+
+## Replay mode
+
+`TRULAYER_MODE=replay` lets you serialize captured traces to a JSONL file and re-emit them later — useful for golden-file regression tests, reproducing a specific flow in CI, or debugging locally without re-running the original workload.
+
+**Capture to a file:**
+
+```python
+import trulayer
+
+client, sender = trulayer.create_test_client(project_name="my-project")
+
+with client.trace("checkout") as t, t.span("charge", "tool") as s:
+    s.set_output("ok")
+client.flush()
+
+sender.flush_to_file("traces.jsonl")
+```
+
+**Replay from a file:**
+
+```python
+import trulayer
+
+sender = trulayer.replay("traces.jsonl")
+assert len(sender.traces) == 1
+assert sender.spans[0]["name"] == "charge"
+```
+
+**Env-driven replay at startup:**
+
+```bash
+export TRULAYER_MODE=replay
+export TRULAYER_REPLAY_FILE=traces.jsonl
+```
+
+```python
+client = trulayer.init(api_key="", project_name="replay-test")
+# client._batch.traces is pre-populated from the JSONL file
+```
+
+Malformed lines, non-object payloads, and missing files all emit a `UserWarning` and are skipped — `replay()` never raises into caller code.
+
 ## Error Handling
 
 The SDK is fire-and-forget: transient HTTP failures are retried with exponential backoff (up to 3 attempts) and eventually surfaced via `warnings.warn`. User code is never interrupted by network errors.

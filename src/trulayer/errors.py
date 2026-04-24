@@ -19,6 +19,20 @@ class TruLayerError(Exception):
     """Base class for all TruLayer SDK exceptions."""
 
 
+class TruLayerFlushError(TruLayerError):
+    """Raised on flush failure when ``TRULAYER_FAIL_MODE=block`` is set.
+
+    The SDK's default behavior is to drop batches after retries exhaust and
+    emit a warning — this exception is only raised when the operator has
+    opted into blocking semantics via the ``TRULAYER_FAIL_MODE`` environment
+    variable. It indicates that the TruLayer API could not be reached after
+    all configured retries.
+
+    The underlying exception (HTTP error, network failure, etc.) is available
+    via ``__cause__``.
+    """
+
+
 class InvalidAPIKeyError(TruLayerError):
     """Raised when the TruLayer API rejects a request with HTTP 401 and an
     error code of ``invalid_api_key`` or ``api_key_expired``.
@@ -55,6 +69,7 @@ def parse_invalid_api_key_payload(body: Any) -> InvalidAPIKeyCode | None:
 
 __all__ = [
     "TruLayerError",
+    "TruLayerFlushError",
     "InvalidAPIKeyError",
     "InvalidAPIKeyCode",
     "parse_invalid_api_key_payload",

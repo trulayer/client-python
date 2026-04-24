@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -60,3 +62,20 @@ class LocalBatchSender:
 
     def clear(self) -> None:
         self._batches.clear()
+
+    # -- Persistence ---------------------------------------------------------
+
+    def flush_to_file(self, path: str) -> None:
+        """Serialize captured traces to a JSONL file at ``path``.
+
+        Each line is a JSON object matching the wire shape of a single trace
+        (the same shape that would be sent to the ingest API). Existing file
+        contents at ``path`` are overwritten. Parent directories must exist.
+
+        The written file can be replayed later via :func:`trulayer.replay`.
+        """
+        target = Path(path)
+        with target.open("w", encoding="utf-8") as fh:
+            for trace in self.traces:
+                fh.write(json.dumps(trace, separators=(",", ":")))
+                fh.write("\n")

@@ -50,7 +50,8 @@ class TruLayerClient:
         if not 0.0 <= sample_rate <= 1.0:
             raise ValueError(f"sample_rate must be between 0.0 and 1.0, got {sample_rate}")
 
-        local_mode = _sender is not None or os.environ.get("TRULAYER_MODE") == "local"
+        mode = os.environ.get("TRULAYER_MODE")
+        local_mode = _sender is not None or mode in {"local", "replay"}
 
         name = project_name or project_id
         if not name:
@@ -78,12 +79,24 @@ class TruLayerClient:
 
         if _sender is not None:
             self._batch = _sender
-        elif os.environ.get("TRULAYER_MODE") == "local":
+        elif mode == "local":
             from trulayer.local_batch import LocalBatchSender  # noqa: PLC0415
 
             self._batch = LocalBatchSender()
             warnings.warn(
                 "[trulayer] running in LOCAL mode — no data will be sent to the API",
+                stacklevel=2,
+            )
+        elif mode == "replay":
+            # In replay mode the client still captures new traces locally (so
+            # tests can intermix fresh spans with replayed ones). The replay
+            # file itself is materialized into a sender via
+            # ``trulayer.replay(file)`` / is picked up in ``init()`` below.
+            from trulayer.local_batch import LocalBatchSender  # noqa: PLC0415
+
+            self._batch = LocalBatchSender()
+            warnings.warn(
+                "[trulayer] running in REPLAY mode — no data will be sent to the API",
                 stacklevel=2,
             )
         else:
