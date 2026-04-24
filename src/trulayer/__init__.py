@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
+import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from trulayer.client import TruLayerClient
-from trulayer.errors import InvalidAPIKeyError, TruLayerError
+from trulayer.errors import InvalidAPIKeyError, TruLayerError, TruLayerFlushError
 from trulayer.instruments.anthropic import instrument_anthropic, uninstrument_anthropic
 from trulayer.instruments.autogen import instrument_autogen
 from trulayer.instruments.crewai import instrument_crewai
@@ -18,6 +20,7 @@ from trulayer.instruments.pydanticai import instrument_pydanticai
 from trulayer.local_batch import LocalBatchSender
 from trulayer.model import EventData, FeedbackData, SpanData, TraceData
 from trulayer.redact import BUILTIN_PACKS, Redactor, Rule, redact
+from trulayer.replay import replay
 from trulayer.testing import SenderAssertions, assert_sender, create_test_client
 from trulayer.trace import TraceContext, current_trace
 
@@ -57,6 +60,23 @@ def init(
         metadata_validator=metadata_validator,
         redactor=redactor,
     )
+
+    # TRULAYER_MODE=replay + TRULAYER_REPLAY_FILE: materialize traces from the
+    # given JSONL file into the (local) batch sender so tests can assert on
+    # them without re-running the original workload.
+    if os.environ.get("TRULAYER_MODE") == "replay":
+        replay_file = os.environ.get("TRULAYER_REPLAY_FILE")
+        if not replay_file:
+            warnings.warn(
+                "trulayer: TRULAYER_MODE=replay requires TRULAYER_REPLAY_FILE "
+                "to point at a JSONL file — no traces were replayed.",
+                stacklevel=2,
+            )
+        else:
+            replayed = replay(replay_file)
+            for trace in replayed.traces:
+                _global_client._batch.enqueue(trace)
+
     return _global_client
 
 
@@ -98,6 +118,7 @@ __all__ = [
     "EventData",
     "FeedbackData",
     "LocalBatchSender",
+    "replay",
     "create_test_client",
     "assert_sender",
     "SenderAssertions",
@@ -119,4 +140,5 @@ __all__ = [
     "BUILTIN_PACKS",
     "InvalidAPIKeyError",
     "TruLayerError",
+    "TruLayerFlushError",
 ]

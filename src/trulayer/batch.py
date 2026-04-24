@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import queue
 import threading
 import warnings
@@ -9,12 +10,21 @@ from typing import Any
 
 import httpx
 
-from trulayer.errors import InvalidAPIKeyError, parse_invalid_api_key_payload
+from trulayer.errors import (
+    InvalidAPIKeyError,
+    TruLayerFlushError,
+    parse_invalid_api_key_payload,
+)
 
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 0.5  # seconds
+
+
+def _fail_mode_is_block() -> bool:
+    """Return True iff ``TRULAYER_FAIL_MODE=block`` is set in the environment."""
+    return os.environ.get("TRULAYER_FAIL_MODE", "").strip().lower() == "block"
 
 
 class BatchSender:
@@ -43,6 +53,16 @@ class BatchSender:
         # set, the sender drops all queued and future events — retrying would
         # waste the backend's time and cannot succeed.
         self._fatal_error: InvalidAPIKeyError | None = None
+        # When True, flush failures are raised as TruLayerFlushError via the
+        # awaited flush future instead of dropped with a warning. Operators
+        # opt in by setting TRULAYER_FAIL_MODE=block. Read once at
+        # construction time so runtime mutation of the env var can't flip
+        # behavior mid-process.
+        self._fail_mode_block = _fail_mode_is_block()
+        # Tracks whether we've already warned about a drop in the current
+        # failure window. Cleared on a successful send so the next outage
+        # produces exactly one warning, not one per batch.
+        self._drop_warned = False
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, daemon=True, name="trulayer-batch")
@@ -56,15 +76,22 @@ class BatchSender:
             asyncio.run_coroutine_threadsafe(self._flush(), self._loop)
 
     def shutdown(self, timeout: float = 5.0) -> None:
+        pending_error: TruLayerFlushError | None = None
         if self._loop and self._thread and self._thread.is_alive():
             if self._fatal_error is None:
                 future = asyncio.run_coroutine_threadsafe(self._flush(), self._loop)
                 try:
                     future.result(timeout=timeout)
+                except TruLayerFlushError as exc:
+                    # In fail-mode=block, surface the error to the caller
+                    # after we've cleanly stopped the background loop.
+                    pending_error = exc
                 except Exception as exc:
                     warnings.warn(f"trulayer: flush on shutdown failed: {exc}", stacklevel=2)
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._thread.join(timeout=timeout)
+        if pending_error is not None:
+            raise pending_error
 
     @property
     def fatal_error(self) -> InvalidAPIKeyError | None:
@@ -115,6 +142,7 @@ class BatchSender:
                 return
 
     async def _send_with_retry(self, items: list[dict[str, Any]]) -> None:
+        last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -140,15 +168,31 @@ class BatchSender:
                             )
                             return
                     resp.raise_for_status()
+                    # Success — reset the one-warning-per-window latch so the
+                    # next outage produces exactly one warning.
+                    self._drop_warned = False
                     return
             except Exception as exc:
+                last_exc = exc
                 if attempt == _MAX_RETRIES - 1:
-                    warnings.warn(
-                        f"trulayer: failed to send batch of {len(items)} items after "
-                        f"{_MAX_RETRIES} retries: {exc}",
-                        stacklevel=2,
-                    )
+                    if self._fail_mode_block:
+                        raise TruLayerFlushError(
+                            f"trulayer: failed to send batch of {len(items)} items after "
+                            f"{_MAX_RETRIES} retries"
+                        ) from exc
+                    if not self._drop_warned:
+                        warnings.warn(
+                            f"trulayer: failed to send batch of {len(items)} items after "
+                            f"{_MAX_RETRIES} retries: {exc} "
+                            f"(further drops in this failure window will be silent "
+                            f"until the next successful send)",
+                            stacklevel=2,
+                        )
+                        self._drop_warned = True
                     return
                 delay = _RETRY_BASE_DELAY * (2**attempt)
                 logger.debug("trulayer: retry %d after %.1fs: %s", attempt + 1, delay, exc)
                 await asyncio.sleep(delay)
+        # Defensive: retry loop should always return or raise above.
+        if last_exc is not None and self._fail_mode_block:
+            raise TruLayerFlushError("trulayer: flush failed") from last_exc
