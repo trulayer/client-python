@@ -66,11 +66,64 @@ jobs:
           enable-cache: true
       - run: uv build
 
+  sbom:
+    name: SBOM generation (dry run)
+    # Mirrors the release workflow's SBOM step on every PR so a future edit
+    # cannot silently break CycloneDX generation between tag pushes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - run: uv build
+      - name: Generate CycloneDX SBOM
+        run: |
+          uv tool install cyclonedx-bom
+          uv tool run cyclonedx-py environment \
+            --output-format JSON \
+            --output-file dist/trulayer-sbom.cdx.json \
+            "$(uv run python -c 'import sys; print(sys.executable)')"
+      - name: Validate SBOM is well-formed CycloneDX
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          with open("dist/trulayer-sbom.cdx.json") as f:
+              doc = json.load(f)
+          assert doc.get("bomFormat") == "CycloneDX", "bomFormat != CycloneDX"
+          assert doc.get("specVersion", "").startswith("1."), "missing specVersion"
+          assert isinstance(doc.get("components"), list), "components must be a list"
+          assert len(doc["components"]) > 0, "SBOM has no components"
+          print(f"SBOM OK: {len(doc['components'])} components, spec {doc['specVersion']}")
+          PY
+
+  release-workflow-lint:
+    name: Release workflow supply-chain lint
+    # Static check so a PR that drops Sigstore signing or SBOM generation
+    # from release.yml fails here instead of silently on the next tag push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release.yml wires Sigstore + CycloneDX
+        run: |
+          set -euo pipefail
+          wf=.github/workflows/release.yml
+          grep -q 'sigstore/gh-action-sigstore-python' "$wf" \
+            || { echo "release.yml: missing Sigstore signing action"; exit 1; }
+          grep -q 'cyclonedx-py' "$wf" \
+            || { echo "release.yml: missing CycloneDX SBOM generation"; exit 1; }
+          grep -q 'softprops/action-gh-release' "$wf" \
+            || { echo "release.yml: missing GitHub Release attachment"; exit 1; }
+          grep -q 'sigstore verify identity' "$wf" \
+            || { echo "release.yml: missing post-sign verification step"; exit 1; }
+          echo "release.yml: all required supply-chain steps present"
+
   ci:
     name: ci
     if: always()
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, build]
+    needs: [lint, typecheck, test, build, sbom, release-workflow-lint]
     steps:
       - name: Aggregate result
         run: |
