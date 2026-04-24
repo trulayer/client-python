@@ -1,5 +1,7 @@
 # TruLayer AI — Python SDK
 
+[![codecov](https://codecov.io/gh/trulayer/client-python/graph/badge.svg?token=9IDXDSZZPD)](https://codecov.io/gh/trulayer/client-python)
+
 > **Status: Alpha.** APIs are pre-`1.0.0` and may change between minor releases.
 > Pin a specific version in production until `1.0.0` ships.
 
