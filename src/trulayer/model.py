@@ -32,7 +32,7 @@ class SpanData(BaseModel):
     id: str = Field(default_factory=new_id)
     trace_id: str = ""
     name: str
-    span_type: str = Field(default="default", serialization_alias="type")
+    span_type: str = Field(default="other", serialization_alias="type")
     input: str | None = None
     output: str | None = None
     error: bool = False

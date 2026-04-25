@@ -56,7 +56,7 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
         parent_id: str = "",
         **kwargs: Any,
     ) -> str:
-        span_type = _EVENT_TYPE_MAP.get(event_type, "default")
+        span_type = _EVENT_TYPE_MAP.get(event_type, "other")
         input_text = ""
 
         if payload is not None:

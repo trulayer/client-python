@@ -47,7 +47,7 @@ class TestLocalBatchSender:
         sender.enqueue(
             {
                 "id": "t2",
-                "spans": [{"name": "s3", "type": "default"}],
+                "spans": [{"name": "s3", "type": "other"}],
             }
         )
         assert len(sender.spans) == 3

@@ -64,7 +64,7 @@ def _scrub_payload(payload: dict[str, Any], fn: Callable[[str], str]) -> dict[st
 class SpanContext:
     """Sync context manager for a single span within a trace."""
 
-    def __init__(self, trace_ctx: TraceContext, name: str, span_type: str = "default") -> None:
+    def __init__(self, trace_ctx: TraceContext, name: str, span_type: str = "other") -> None:
         self._trace = trace_ctx
         self._data = SpanData(trace_id=trace_ctx._data.id, name=name, span_type=span_type)
         self._start_ns = 0
@@ -145,7 +145,7 @@ class TraceContext:
         self._sampled = True
         self._token: contextvars.Token[TraceContext | None] | None = None
 
-    def span(self, name: str, span_type: str = "default") -> SpanContext:
+    def span(self, name: str, span_type: str = "other") -> SpanContext:
         return SpanContext(self, name, span_type)
 
     def set_input(self, value: str) -> None:
