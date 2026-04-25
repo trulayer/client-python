@@ -92,7 +92,7 @@ def _patch_components(pipeline: Any, trace_ctx: TraceContext) -> None:
             _name: str = component_name,
             **kwargs: Any,
         ) -> Any:
-            with trace_ctx.span(f"haystack:{_name}", span_type="default") as span:
+            with trace_ctx.span(f"haystack:{_name}", span_type="other") as span:
                 try:
                     result = _orig(*args, **kwargs)
                     return result

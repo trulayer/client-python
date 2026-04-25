@@ -226,7 +226,7 @@ def test_unknown_event_type_uses_default() -> None:
         event_id="evt-5",
     )
     _, span_type, _ = handler._open_spans["evt-5"]
-    assert span_type == "default"
+    assert span_type == "other"
 
 
 # ---------------------------------------------------------------------------

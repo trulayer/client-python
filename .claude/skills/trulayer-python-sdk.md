@@ -106,7 +106,7 @@ Methods on the trace object inside the `with`:
 - `trace.set_cost(cost: float)`
 - `trace.set_metadata(**kwargs)`
 - `trace.add_tag(tag: str)`
-- `trace.span(name: str, span_type: str = "default") -> SpanContext`
+- `trace.span(name: str, span_type: str = "other") -> SpanContext`
 
 ### Span API
 
@@ -119,7 +119,7 @@ with trace.span("retriever", span_type="retrieval") as span:
     span.set_metadata(top_k=5)
 ```
 
-Common `span_type` values: `"llm"`, `"retrieval"`, `"tool"`, `"default"`.
+Valid `span_type` values: `"llm"`, `"retrieval"`, `"tool"`, `"other"`.
 
 ### Async usage
 

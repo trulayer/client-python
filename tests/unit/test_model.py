@@ -14,7 +14,7 @@ def test_trace_data_defaults() -> None:
 def test_span_data_defaults() -> None:
     s = SpanData(name="llm-call")
     assert s.id
-    assert s.span_type == "default"
+    assert s.span_type == "other"
     assert s.error is False
 
 
