@@ -39,7 +39,7 @@ def test_trace_records_exception() -> None:
     with pytest.raises(ValueError), TraceContext(client):
         raise ValueError("boom")
     payload = client._batch.enqueue.call_args[0][0]
-    # Wire format collapses (error bool, error_message) into error: string | null
+    # error is a string carrying the message, or None.
     assert isinstance(payload["error"], str)
     assert "ValueError" in payload["error"]
 

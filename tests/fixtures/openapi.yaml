@@ -467,7 +467,7 @@ components:
         id: { type: string, format: uuid }
         trace_id: { type: string, format: uuid }
         name: { type: string }
-        span_type: { type: string, enum: [llm, tool, retrieval, other, default] }
+        span_type: { type: string, enum: [llm, tool, retrieval, other] }
         input: { type: string, nullable: true }
         output: { type: string, nullable: true }
         error: { type: boolean }

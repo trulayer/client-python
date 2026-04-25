@@ -208,8 +208,7 @@ class TestModelToWire:
             trace_id="trace-1",
             name="op",
             span_type="llm",
-            error=True,
-            error_message="boom",
+            error="boom",
         )
         wire = span.to_wire()
         assert wire["type"] == "llm"
@@ -226,11 +225,10 @@ class TestModelToWire:
         wire = span.to_wire()
         assert wire["error"] is None
 
-    def test_trace_to_wire_collapses_error_fields(self) -> None:
+    def test_trace_to_wire_error_string(self) -> None:
         trace = TraceData(
             project_id="p",
-            error=True,
-            error_message="fatal",
+            error="fatal",
             spans=[SpanData(name="s", span_type="tool")],
         )
         wire = trace.to_wire()

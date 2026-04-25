@@ -100,8 +100,7 @@ class SpanContext:
         self._data.latency_ms = elapsed // 1_000_000
         self._data.ended_at = _now()
         if exc_type is not None:
-            self._data.error = True
-            self._data.error_message = "".join(
+            self._data.error = "".join(
                 traceback.format_exception(exc_type, exc_val, exc_tb)
             )
         self._trace._data.spans.append(self._data)
@@ -202,8 +201,7 @@ class TraceContext:
         if self._data.latency_ms is None:
             self._data.latency_ms = elapsed // 1_000_000
         if exc_type is not None:
-            self._data.error = True
-            self._data.error_message = "".join(
+            self._data.error = "".join(
                 traceback.format_exception(exc_type, exc_val, exc_tb)
             )
         if self._token is not None:
