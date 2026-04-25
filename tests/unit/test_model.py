@@ -8,14 +8,14 @@ def test_trace_data_defaults() -> None:
     assert t.id  # UUIDv7 auto-generated
     assert t.project_id == "proj-1"
     assert t.spans == []
-    assert t.error is False
+    assert t.error is None
 
 
 def test_span_data_defaults() -> None:
     s = SpanData(name="llm-call")
     assert s.id
     assert s.span_type == "other"
-    assert s.error is False
+    assert s.error is None
 
 
 def test_trace_data_serialises_to_json() -> None:

@@ -20,11 +20,10 @@ class SpanData(BaseModel):
     ``model_dump(mode="json", by_alias=True)`` the JSON keys match the
     TruLayer ingestion schema (``type``, ``start_time``, ``end_time``).
 
-    The trace-level and span-level ``error`` field on the wire is a single
-    ``string | null`` carrying the error message, not a separate boolean
-    plus message pair. The SDK tracks ``error: bool`` and
-    ``error_message: str | None`` internally; ``to_wire()`` collapses them
-    into the correct wire shape.
+    The trace-level and span-level ``error`` field is a single
+    ``string | null`` carrying the error message (or ``None`` when the
+    span/trace succeeded). Both the SDK model and the wire format use the
+    same shape.
     """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -35,8 +34,7 @@ class SpanData(BaseModel):
     span_type: str = Field(default="other", serialization_alias="type")
     input: str | None = None
     output: str | None = None
-    error: bool = False
-    error_message: str | None = None
+    error: str | None = None
     latency_ms: int | None = None
     model: str | None = None
     prompt_tokens: int | None = None
@@ -49,22 +47,18 @@ class SpanData(BaseModel):
         """Serialize this span to the JSON shape expected by ``POST /v1/ingest``.
 
         Renames ``span_type`` → ``type``, ``started_at`` → ``start_time``,
-        ``ended_at`` → ``end_time``, and collapses ``(error, error_message)``
-        into a single ``error: string | null`` carrying the message.
+        ``ended_at`` → ``end_time``. The ``error`` field is forwarded as-is
+        (``string | null``).
         """
-        payload = self.model_dump(mode="json", by_alias=True)
-        # Collapse (error, error_message) into wire-format `error: string | null`.
-        message = payload.pop("error_message", None)
-        payload["error"] = message if self.error else None
-        return payload
+        return self.model_dump(mode="json", by_alias=True)
 
 
 class TraceData(BaseModel):
     """SDK-facing trace model.
 
-    Internal ``error: bool`` + ``error_message: str | None`` are collapsed
-    into a single wire-level ``error: string | null`` by ``to_wire()``,
-    matching the TruLayer ingestion schema.
+    The ``error`` field is a single ``string | null`` carrying the error
+    message (or ``None`` when the trace succeeded), matching the TruLayer
+    ingestion schema.
     """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -79,8 +73,7 @@ class TraceData(BaseModel):
     model: str | None = None
     latency_ms: int | None = None
     cost: float | None = None
-    error: bool = False
-    error_message: str | None = None
+    error: str | None = None
     tags: list[str] = Field(default_factory=list)
     # Optional structured key -> value tags. When non-empty, emitted as the
     # ``tags`` wire field (object form) and takes precedence over the legacy
@@ -99,9 +92,8 @@ class TraceData(BaseModel):
         payload = self.model_dump(
             mode="json",
             by_alias=True,
-            exclude={"spans", "error_message", "tag_map"},
+            exclude={"spans", "tag_map"},
         )
-        payload["error"] = self.error_message if self.error else None
         payload["spans"] = [s.to_wire() for s in self.spans]
         # A non-empty tag map wins over the legacy string-array on the wire.
         if self.tag_map:
