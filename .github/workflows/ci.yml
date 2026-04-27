@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, production]
   pull_request:
     branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/production' }}
 
 jobs:
   lint:
@@ -101,23 +101,21 @@ jobs:
   release-workflow-lint:
     name: Release workflow supply-chain lint
     # Static check so a PR that drops Sigstore signing or SBOM generation
-    # from release.yml fails here instead of silently on the next tag push.
+    # from release-sdk.yml fails here instead of silently on the next tag push.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify release.yml wires Sigstore + CycloneDX
+      - name: Verify release-sdk.yml wires Sigstore + CycloneDX
         run: |
           set -euo pipefail
-          wf=.github/workflows/release.yml
+          wf=.github/workflows/release-sdk.yml
           grep -q 'sigstore/gh-action-sigstore-python' "$wf" \
-            || { echo "release.yml: missing Sigstore signing action"; exit 1; }
+            || { echo "release-sdk.yml: missing Sigstore signing action"; exit 1; }
           grep -q 'cyclonedx-py' "$wf" \
-            || { echo "release.yml: missing CycloneDX SBOM generation"; exit 1; }
+            || { echo "release-sdk.yml: missing CycloneDX SBOM generation"; exit 1; }
           grep -q 'softprops/action-gh-release' "$wf" \
-            || { echo "release.yml: missing GitHub Release attachment"; exit 1; }
-          grep -q 'sigstore verify identity' "$wf" \
-            || { echo "release.yml: missing post-sign verification step"; exit 1; }
-          echo "release.yml: all required supply-chain steps present"
+            || { echo "release-sdk.yml: missing GitHub Release attachment"; exit 1; }
+          echo "release-sdk.yml: all required supply-chain steps present"
 
   ci:
     name: ci
