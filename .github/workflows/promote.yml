@@ -43,6 +43,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TITLE="Release trulayer SDK, ${{ steps.label.outputs.value }}"
+          BODY="Promotes \`main\` to \`production\`. Review the diff below before merging."$'\n\n'"**Triggered by:** @${{ github.actor }}"$'\n'"**Label:** \`${{ steps.label.outputs.value }}\`"$'\n\n'"Merging this PR will trigger the \`Release SDK\` workflow automatically, which publishes the \`trulayer\` package to PyPI."
 
           EXISTING=$(gh pr list --base production --head main --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
 
@@ -55,15 +56,5 @@ jobs:
               --base production \
               --head main \
               --title "$TITLE" \
-              --body "## Release trulayer Python SDK
-
-Promotes \`main\` → \`production\`. Review the diff below before merging.
-
-**Triggered by:** @${{ github.actor }}
-**Label:** \`${{ steps.label.outputs.value }}\`
-
----
-
-Merging this PR will trigger the \`Release SDK\` workflow automatically,
-which publishes the \`trulayer\` package to PyPI."
+              --body "$BODY"
           fi
