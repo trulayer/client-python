@@ -1,11 +1,9 @@
 name: Release SDK
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
-# Publishes the `trulayer` package to PyPI on every merge to main,
+# Publishes the `trulayer` package to PyPI on demand,
 # but only when the version in pyproject.toml changed relative to the
 # previous commit on this branch.
 #
