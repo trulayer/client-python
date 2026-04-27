@@ -1,0 +1,69 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: 'Version label for the PR title (e.g. "0.2.0"). Leave blank to use today''s date (MM/DD/YY).'
+        required: false
+        default: ''
+
+jobs:
+  create-release-pr:
+    name: Create Release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release label
+        id: label
+        run: |
+          if [[ -n "${{ github.event.inputs.label }}" ]]; then
+            echo "value=${{ github.event.inputs.label }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$(date +'%m/%d/%y')" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure production branch exists
+        run: |
+          if git ls-remote --heads origin production | grep -q production; then
+            echo "production branch exists"
+          else
+            echo "Creating production branch from main"
+            git push origin origin/main:refs/heads/production
+          fi
+
+      - name: Create or update release PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Release trulayer SDK, ${{ steps.label.outputs.value }}"
+
+          EXISTING=$(gh pr list --base production --head main --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [[ -n "$EXISTING" ]]; then
+            echo "PR #$EXISTING already exists — updating title"
+            gh pr edit "$EXISTING" --title "$TITLE"
+            gh pr view "$EXISTING" --json url --jq '"Updated: " + .url'
+          else
+            gh pr create \
+              --base production \
+              --head main \
+              --title "$TITLE" \
+              --body "## Release trulayer Python SDK
+
+Promotes \`main\` → \`production\`. Review the diff below before merging.
+
+**Triggered by:** @${{ github.actor }}
+**Label:** \`${{ steps.label.outputs.value }}\`
+
+---
+
+Merging this PR will trigger the \`Release SDK\` workflow automatically,
+which publishes the \`trulayer\` package to PyPI."
+          fi

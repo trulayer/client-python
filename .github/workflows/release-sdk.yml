@@ -1,0 +1,134 @@
+name: Release SDK
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+# Publishes the `trulayer` package to PyPI on every merge to production,
+# but only when the version in pyproject.toml changed relative to the
+# previous commit on this branch.
+#
+# Uses OIDC Trusted Publishing — no PyPI API token needed.
+# Configure a pending publisher on PyPI pointing at this repo,
+# workflow file `release-sdk.yml`, and environment `pypi`.
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  check-version:
+    name: Detect version change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Detect version change
+        id: check
+        run: |
+          PREV=$(git show HEAD^:pyproject.toml 2>/dev/null | grep '^version' | head -1 | sed 's/version = "\(.*\)"/\1/' || echo "0.0.0")
+          CURR=$(grep '^version' pyproject.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "prev=$PREV current=$CURR"
+          if [ "$PREV" != "$CURR" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$CURR" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build distributions
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.check-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Build sdist + wheel
+        run: uv build
+      - name: Generate CycloneDX SBOM
+        run: |
+          uv tool install cyclonedx-bom
+          uv tool run cyclonedx-py environment \
+            --output-format JSON \
+            --output-file "dist/trulayer-${{ needs.check-version.outputs.version }}-sbom.cdx.json" \
+            "$(uv run python -c 'import sys; print(sys.executable)')"
+      - name: Upload dist + SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Stash SBOM before PyPI upload
+        run: |
+          mkdir -p sbom
+          mv dist/*.cdx.json sbom/
+      - name: Publish wheel + sdist to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Restore SBOM into dist
+        run: mv sbom/*.cdx.json dist/
+      - name: Upload dist-with-sbom for downstream jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-with-sbom
+          path: dist/
+      - name: Tag release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ needs.check-version.outputs.version }}" || echo "tag already exists"
+          git push origin "v${{ needs.check-version.outputs.version }}" || echo "tag already pushed"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sign:
+    name: Sign artifacts with Sigstore
+    needs: [check-version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-with-sbom
+          path: dist/
+      - name: Sign distributions (keyless, Rekor transparency log)
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+            ./dist/*.cdx.json
+          upload-signing-artifacts: true
+      - name: Attach artifacts + signatures + SBOM to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
+            dist/*.cdx.json
+            dist/*.sigstore
+          fail_on_unmatched_files: true
+          generate_release_notes: true
