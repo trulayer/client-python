@@ -1,6 +1,6 @@
 [project]
 name = "trulayer"
-version = "0.1.0"
+version = "0.1.1"
 description = "TruLayer AI — trace capture SDK for Python"
 requires-python = ">=3.11"
 license = { text = "MIT" }
