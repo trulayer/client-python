@@ -76,7 +76,7 @@ jobs:
           git add pyproject.toml
           git commit -m "chore: release trulayer@${{ steps.version.outputs.version }} [skip ci]"
           git tag "v${{ steps.version.outputs.version }}"
-          git push origin HEAD:production
+          git push origin HEAD:main
           git push origin "v${{ steps.version.outputs.version }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
