@@ -98,6 +98,6 @@ jobs:
             dist/*.tar.gz
             dist/*.whl
             dist/*.cdx.json
-            dist/*.sigstore
+            dist/*.sigstore.json
           fail_on_unmatched_files: true
           generate_release_notes: true
