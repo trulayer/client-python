@@ -14,6 +14,16 @@ InvalidAPIKeyCode = Literal["invalid_api_key", "api_key_expired"]
 
 _INVALID_API_KEY_MESSAGE = "API key is invalid or has expired — check your configuration."
 
+_PROJECT_ARCHIVED_CODE = "error.project.archived"
+_PROJECT_ARCHIVED_MESSAGE = (
+    "Project is archived — trace export disabled. Unarchive the project at "
+    "app.trulayer.ai to resume."
+)
+_FORBIDDEN_MESSAGE = (
+    "Trace export disabled — the API rejected the request with HTTP 403. "
+    "Check that the API key is valid and the project is active at app.trulayer.ai."
+)
+
 
 class TruLayerError(Exception):
     """Base class for all TruLayer SDK exceptions."""
@@ -50,6 +60,39 @@ class InvalidAPIKeyError(TruLayerError):
         self.code: InvalidAPIKeyCode = code
 
 
+class ProjectArchivedError(TruLayerError):
+    """Raised when the TruLayer API rejects ingestion with HTTP 403 because the
+    project associated with the API key has been archived.
+
+    This is a permanent state for the current client — retrying cannot
+    succeed until the project is unarchived. The SDK halts pending and
+    future requests for the lifetime of the client instance.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_PROJECT_ARCHIVED_MESSAGE)
+
+
+class ForbiddenError(TruLayerError):
+    """Raised when the TruLayer API rejects ingestion with HTTP 403 for any
+    reason that isn't specifically ``error.project.archived``.
+
+    Generic 403s indicate a permanent credentials or access problem — the
+    SDK halts submission to avoid hammering the backend.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(_FORBIDDEN_MESSAGE)
+
+
+def is_project_archived_payload(body: Any) -> bool:
+    """Return True iff ``body`` represents the project-archived 403 payload."""
+    if not isinstance(body, dict):
+        return False
+    raw = body.get("code") or body.get("error")
+    return raw == _PROJECT_ARCHIVED_CODE
+
+
 def parse_invalid_api_key_payload(body: Any) -> InvalidAPIKeyCode | None:
     """Return the matched non-retryable code if ``body`` represents an invalid
     or expired API key response, else ``None``.
@@ -72,5 +115,8 @@ __all__ = [
     "TruLayerFlushError",
     "InvalidAPIKeyError",
     "InvalidAPIKeyCode",
+    "ProjectArchivedError",
+    "ForbiddenError",
     "parse_invalid_api_key_payload",
+    "is_project_archived_payload",
 ]
