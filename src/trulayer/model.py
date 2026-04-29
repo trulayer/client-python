@@ -39,6 +39,7 @@ class SpanData(BaseModel):
     model: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    cost: float | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     started_at: datetime = Field(default_factory=_now, serialization_alias="start_time")
     ended_at: datetime | None = Field(default=None, serialization_alias="end_time")

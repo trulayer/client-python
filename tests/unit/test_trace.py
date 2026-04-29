@@ -340,6 +340,17 @@ def test_set_model_and_set_cost_populate_payload() -> None:
     assert payload["cost"] == pytest.approx(0.0123)
 
 
+def test_span_set_cost_populates_span_payload() -> None:
+    """Per-LLM-call cost belongs at the span level — each span in a multi-span
+    trace can carry its own cost."""
+    client = _make_client()
+    with TraceContext(client, name="t") as ctx, ctx.span("llm-call", span_type="llm") as s:
+        s.set_cost(0.0042)
+    payload = client._batch.enqueue.call_args[0][0]
+    assert len(payload["spans"]) == 1
+    assert payload["spans"][0]["cost"] == pytest.approx(0.0042)
+
+
 def test_latency_ms_is_auto_derived_on_exit() -> None:
     client = _make_client()
     with TraceContext(client, name="t"):

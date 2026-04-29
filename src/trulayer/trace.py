@@ -82,6 +82,14 @@ class SpanContext:
         self._data.prompt_tokens = prompt
         self._data.completion_tokens = completion
 
+    def set_cost(self, usd: float) -> None:
+        """Record the USD cost for this span (e.g. an LLM call).
+
+        Each span in a multi-span trace can carry its own cost — useful when a
+        trace contains multiple LLM calls and you want per-call cost attribution.
+        """
+        self._data.cost = usd
+
     def set_metadata(self, **kwargs: Any) -> None:
         self._data.metadata.update(kwargs)
 
