@@ -22,7 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # GH_PROMOTE_TOKEN is a PAT with repo+workflow scopes that can bypass
+          # branch protection rules on main (required for the version bump push).
+          token: ${{ secrets.GH_PROMOTE_TOKEN }}
           fetch-depth: 0
 
       - uses: astral-sh/setup-uv@v4
@@ -78,8 +80,6 @@ jobs:
           git tag "v${{ steps.version.outputs.version }}"
           git push origin HEAD:main
           git push origin "v${{ steps.version.outputs.version }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sign distributions with Sigstore
         uses: sigstore/gh-action-sigstore-python@v3.0.0
