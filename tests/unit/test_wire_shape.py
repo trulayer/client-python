@@ -143,6 +143,24 @@ class TestSpanWireShape:
         assert isinstance(sp["latency_ms"], int)
         assert sp["latency_ms"] >= 0
 
+    def test_span_cost_serialized_when_set(self) -> None:
+        """Per-span cost: ``span.set_cost(usd)`` populates the ``cost`` wire field."""
+        client, sender = create_test_client(project_name="proj-wire")
+        with client.trace("cost-span") as t, t.span("llm-call", span_type="llm") as s:
+            s.set_cost(0.0042)
+
+        sp = sender.traces[0]["spans"][0]
+        assert sp["cost"] == pytest.approx(0.0042)
+
+    def test_span_cost_null_when_not_set(self) -> None:
+        """``span.cost`` defaults to ``None`` when ``set_cost`` was never called."""
+        client, sender = create_test_client(project_name="proj-wire")
+        with client.trace("no-cost") as t, t.span("plain-span"):
+            pass
+
+        sp = sender.traces[0]["spans"][0]
+        assert sp["cost"] is None
+
     def test_span_error_is_string_on_exception(self) -> None:
         """Spec: span ``error`` carries the formatted traceback / message."""
         client, sender = create_test_client(project_name="proj-wire")
