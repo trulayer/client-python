@@ -11,8 +11,12 @@ from typing import Any
 import httpx
 
 from trulayer.errors import (
+    ForbiddenError,
     InvalidAPIKeyError,
+    ProjectArchivedError,
+    TruLayerError,
     TruLayerFlushError,
+    is_project_archived_payload,
     parse_invalid_api_key_payload,
 )
 
@@ -49,10 +53,15 @@ class BatchSender:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
-        # Latched when the API reports a permanent credential failure. Once
-        # set, the sender drops all queued and future events — retrying would
-        # waste the backend's time and cannot succeed.
-        self._fatal_error: InvalidAPIKeyError | None = None
+        # Latched when the API reports a permanent failure (invalid/expired
+        # API key, archived project, or any other 403). Once set, the sender
+        # drops all queued and future events — retrying would waste the
+        # backend's time and cannot succeed.
+        self._fatal_error: TruLayerError | None = None
+        # Independent flag that mirrors ``_fatal_error`` but is named for the
+        # caller-facing semantics (the client is permanently disabled for the
+        # rest of its lifetime). New client instances start with this False.
+        self._disabled: bool = False
         # When True, flush failures are raised as TruLayerFlushError via the
         # awaited flush future instead of dropped with a warning. Operators
         # opt in by setting TRULAYER_FAIL_MODE=block. Read once at
@@ -94,13 +103,23 @@ class BatchSender:
             raise pending_error
 
     @property
-    def fatal_error(self) -> InvalidAPIKeyError | None:
+    def fatal_error(self) -> TruLayerError | None:
         """The latched non-retryable error, if any.
 
         Exposed for tests and for callers that want to surface configuration
         failures proactively.
         """
         return self._fatal_error
+
+    @property
+    def disabled(self) -> bool:
+        """True iff the sender has latched into a permanent disabled state.
+
+        New client instances start with this ``False`` — it is set after the
+        API returns a non-retryable 401 or 403, and never reset for the
+        lifetime of the sender.
+        """
+        return self._disabled
 
     def _run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -160,6 +179,7 @@ class BatchSender:
                         code = parse_invalid_api_key_payload(payload)
                         if code is not None:
                             self._fatal_error = InvalidAPIKeyError(code)
+                            self._disabled = True
                             self._drain_queue()
                             warnings.warn(
                                 f"trulayer: {self._fatal_error} (code: {code}) "
@@ -167,6 +187,47 @@ class BatchSender:
                                 stacklevel=2,
                             )
                             return
+                    if resp.status_code == 403:
+                        # 403 is always permanent for this client. Distinguish
+                        # the project-archived case (so callers can surface a
+                        # tailored message) from a generic 403, but disable
+                        # in both cases — retrying cannot succeed.
+                        body: Any = None
+                        try:
+                            body = resp.json()
+                        except Exception:
+                            body = None
+                        if is_project_archived_payload(body):
+                            self._fatal_error = ProjectArchivedError()
+                            logger.error(
+                                "[TruLayer] Project is archived — trace export "
+                                "disabled. Unarchive the project at "
+                                "app.trulayer.ai to resume."
+                            )
+                            warnings.warn(
+                                "[TruLayer] Project is archived — trace export "
+                                "disabled. Unarchive the project at "
+                                "app.trulayer.ai to resume.",
+                                stacklevel=2,
+                            )
+                        else:
+                            self._fatal_error = ForbiddenError()
+                            logger.error(
+                                "[TruLayer] Trace export disabled — the API "
+                                "rejected the request with HTTP 403. Check "
+                                "that the API key is valid and the project "
+                                "is active at app.trulayer.ai."
+                            )
+                            warnings.warn(
+                                "[TruLayer] Trace export disabled — the API "
+                                "rejected the request with HTTP 403. Check "
+                                "that the API key is valid and the project "
+                                "is active at app.trulayer.ai.",
+                                stacklevel=2,
+                            )
+                        self._disabled = True
+                        self._drain_queue()
+                        return
                     resp.raise_for_status()
                     # Success — reset the one-warning-per-window latch so the
                     # next outage produces exactly one warning.
