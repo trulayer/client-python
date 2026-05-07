@@ -11,7 +11,7 @@ Read `src/trulayer/model.py` first to understand existing models and field conve
 
 Generate a Pydantic v2 model following these rules:
 - Inherit from `pydantic.BaseModel`
-- All IDs are `str` (UUIDv7 as string — generated via `uuid.uuid7()`)
+- All IDs are `str` (UUIDv7 as string — generated via `new_id()` from `trulayer._ids`)
 - All timestamps are `datetime` with `default_factory=datetime.utcnow`
 - Optional fields use `field: SomeType | None = None`
 - Use `model_config = ConfigDict(extra="ignore")` so forward-compatible with new server fields
@@ -23,12 +23,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
+from trulayer._ids import new_id
 
 
 class <name>(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(default_factory=lambda: str(uuid.uuid7()))
+    id: str = Field(default_factory=new_id)
     tenant_id: str
     # TODO: domain fields
     created_at: datetime = Field(default_factory=datetime.utcnow)
