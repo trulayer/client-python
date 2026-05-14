@@ -130,9 +130,14 @@ def test_on_llm_start_stores_entry() -> None:
     run_id = uuid4()
     _on_llm_start(h, {"kwargs": {"model_name": "gpt-4o"}}, ["hi there"], run_id=run_id)
     assert run_id in h._tl_starts
-    _, model, input_text = h._tl_starts[run_id]
+    _, start_wall, model, input_text = h._tl_starts[run_id]
     assert model == "gpt-4o"
     assert input_text == "hi there"
+    # start_wall captured before the upstream call begins
+    from datetime import datetime as _dt
+
+    assert isinstance(start_wall, _dt)
+    assert start_wall.tzinfo is not None
 
 
 def test_on_llm_end_records_span_inside_trace() -> None:

@@ -115,7 +115,7 @@ def test_on_event_start_llm_opens_span() -> None:
     )
     assert event_id == "evt-1"
     assert "evt-1" in handler._open_spans
-    _, span_type, input_text = handler._open_spans["evt-1"]
+    _, _start_wall, span_type, input_text = handler._open_spans["evt-1"]
     assert span_type == "llm"
     assert "hello" in input_text
 
@@ -162,7 +162,7 @@ def test_on_event_start_query_opens_retrieval_span() -> None:
         event_id="evt-3",
     )
     assert event_id == "evt-3"
-    _, span_type, input_text = handler._open_spans["evt-3"]
+    _, _start_wall, span_type, input_text = handler._open_spans["evt-3"]
     assert span_type == "retrieval"
     assert input_text == "what is the meaning of life?"
 
@@ -179,7 +179,7 @@ def test_on_event_start_retrieve_opens_retrieval_span() -> None:
         payload={"query_str": "search query"},
         event_id="evt-retrieve",
     )
-    _, span_type, input_text = handler._open_spans["evt-retrieve"]
+    _, _start_wall, span_type, input_text = handler._open_spans["evt-retrieve"]
     assert span_type == "retrieval"
     assert input_text == "search query"
 
@@ -225,7 +225,7 @@ def test_unknown_event_type_uses_default() -> None:
         payload=None,
         event_id="evt-5",
     )
-    _, span_type, _ = handler._open_spans["evt-5"]
+    _, _start_wall, span_type, _ = handler._open_spans["evt-5"]
     assert span_type == "other"
 
 

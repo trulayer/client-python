@@ -6,6 +6,7 @@ import functools
 import time
 import warnings
 from collections.abc import AsyncGenerator, Generator
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -35,20 +36,22 @@ def instrument_anthropic(client: TruLayerClient) -> None:
 
     @functools.wraps(_original_create)
     def _patched_create(self: Any, *args: Any, **kwargs: Any) -> Any:
+        start_wall = datetime.now(tz=UTC)
         start = time.monotonic()
         result = _original_create(self, *args, **kwargs)
         if kwargs.get("stream"):
-            return _wrap_sync_stream(client, kwargs, result, start)
-        _record_span(client, kwargs, result, time.monotonic() - start)
+            return _wrap_sync_stream(client, kwargs, result, start, start_wall)
+        _record_span(client, kwargs, result, time.monotonic() - start, start_wall)
         return result
 
     @functools.wraps(_original_acreate)
     async def _patched_acreate(self: Any, *args: Any, **kwargs: Any) -> Any:
+        start_wall = datetime.now(tz=UTC)
         start = time.monotonic()
         result = await _original_acreate(self, *args, **kwargs)
         if kwargs.get("stream"):
-            return _wrap_async_stream(client, kwargs, result, start)
-        _record_span(client, kwargs, result, time.monotonic() - start)
+            return _wrap_async_stream(client, kwargs, result, start, start_wall)
+        _record_span(client, kwargs, result, time.monotonic() - start, start_wall)
         return result
 
     anthropic.resources.messages.Messages.create = _patched_create
@@ -78,7 +81,10 @@ def _record_span(
     kwargs: dict[str, Any],
     result: Any,
     elapsed: float,
+    start_wall: datetime | None = None,
 ) -> None:
+    if start_wall is None:
+        start_wall = datetime.now(tz=UTC) - timedelta(seconds=elapsed)
     try:
         from trulayer.trace import current_trace  # noqa: PLC0415
 
@@ -104,12 +110,19 @@ def _record_span(
         messages = kwargs.get("messages", [])
         input_text = messages[-1].get("content", "") if messages else ""
 
+        latency_ms = int(elapsed * 1000)
         with trace.span("anthropic.messages", span_type="llm") as span:
             span.set_input(str(input_text))
             span.set_output(output)
             span.set_model(kwargs.get("model", ""))
             span.set_tokens(prompt=prompt_tokens, completion=completion_tokens)
-            span._data.latency_ms = int(elapsed * 1000)
+        # Overwrite the auto-captured fields with the real wall-clock window;
+        # the context manager's __enter__/__exit__ ran after the upstream call
+        # returned and so left latency_ms ≈ 0 and the timestamps collapsed to
+        # completion time.
+        span._data.latency_ms = latency_ms
+        span._data.started_at = start_wall
+        span._data.ended_at = start_wall + timedelta(milliseconds=latency_ms)
     except Exception as exc:
         warnings.warn(f"trulayer: failed to record Anthropic span: {exc}", stacklevel=2)
 
@@ -119,8 +132,11 @@ def _wrap_sync_stream(
     kwargs: dict[str, Any],
     stream: Any,
     start: float,
+    start_wall: datetime | None = None,
 ) -> Generator[Any, None, None]:
     """Yield events from a streaming Anthropic response while recording a span."""
+    if start_wall is None:
+        start_wall = datetime.now(tz=UTC)
     try:
         from trulayer.trace import SpanContext, current_trace  # noqa: PLC0415
 
@@ -136,6 +152,9 @@ def _wrap_sync_stream(
         span.set_input(input_text)
         span.set_model(kwargs.get("model", ""))
         span.__enter__()
+        # Override the __enter__ timestamp with the wall-clock moment the
+        # upstream stream call actually began.
+        span._data.started_at = start_wall
 
         accumulated: list[str] = []
         prompt_tokens: int | None = None
@@ -164,8 +183,14 @@ def _wrap_sync_stream(
         finally:
             span.set_output("".join(accumulated))
             span.set_tokens(prompt=prompt_tokens, completion=completion_tokens)
-            span._data.latency_ms = int((time.monotonic() - start) * 1000)
+            latency_ms = int((time.monotonic() - start) * 1000)
             span.__exit__(*exc_info)
+            # __exit__ overwrites latency/ended_at with its own monotonic
+            # delta and wall clock. Re-anchor both to the upstream window
+            # captured when the patched create() was invoked.
+            span._data.latency_ms = latency_ms
+            span._data.started_at = start_wall
+            span._data.ended_at = start_wall + timedelta(milliseconds=latency_ms)
 
     except Exception as exc:
         warnings.warn(f"trulayer: failed to record Anthropic streaming span: {exc}", stacklevel=2)
@@ -176,8 +201,11 @@ async def _wrap_async_stream(
     kwargs: dict[str, Any],
     stream: Any,
     start: float,
+    start_wall: datetime | None = None,
 ) -> AsyncGenerator[Any, None]:
     """Async-yield events from a streaming Anthropic response while recording a span."""
+    if start_wall is None:
+        start_wall = datetime.now(tz=UTC)
     try:
         from trulayer.trace import SpanContext, current_trace  # noqa: PLC0415
 
@@ -194,6 +222,9 @@ async def _wrap_async_stream(
         span.set_input(input_text)
         span.set_model(kwargs.get("model", ""))
         span.__enter__()
+        # Override the __enter__ timestamp with the wall-clock moment the
+        # upstream stream call actually began.
+        span._data.started_at = start_wall
 
         accumulated: list[str] = []
         prompt_tokens: int | None = None
@@ -222,8 +253,14 @@ async def _wrap_async_stream(
         finally:
             span.set_output("".join(accumulated))
             span.set_tokens(prompt=prompt_tokens, completion=completion_tokens)
-            span._data.latency_ms = int((time.monotonic() - start) * 1000)
+            latency_ms = int((time.monotonic() - start) * 1000)
             span.__exit__(*exc_info)
+            # __exit__ overwrites latency/ended_at with its own monotonic
+            # delta and wall clock. Re-anchor both to the upstream window
+            # captured when the patched create() was invoked.
+            span._data.latency_ms = latency_ms
+            span._data.started_at = start_wall
+            span._data.ended_at = start_wall + timedelta(milliseconds=latency_ms)
 
     except Exception as exc:
         warnings.warn(

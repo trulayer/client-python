@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -45,8 +46,8 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
             event_ends_to_ignore=event_ends_to_ignore or [],
         )
         self._tl_client = client
-        self._open_spans: dict[str, tuple[float, str, str]] = {}
-        # event_id -> (start_monotonic, span_type, input_text)
+        self._open_spans: dict[str, tuple[float, datetime, str, str]] = {}
+        # event_id -> (start_monotonic, start_wall, span_type, input_text)
 
     def on_event_start(
         self,
@@ -70,7 +71,12 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
                 if query:
                     input_text = str(query)
 
-        self._open_spans[event_id] = (time.monotonic(), span_type, input_text)
+        self._open_spans[event_id] = (
+            time.monotonic(),
+            datetime.now(tz=UTC),
+            span_type,
+            input_text,
+        )
         return event_id
 
     def on_event_end(
@@ -84,8 +90,8 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
         if entry is None:
             return
 
-        start_time, span_type, input_text = entry
-        elapsed = time.monotonic() - start_time
+        start_mono, start_wall, span_type, input_text = entry
+        elapsed = time.monotonic() - start_mono
 
         output_text = ""
         if payload is not None:
@@ -110,10 +116,15 @@ class TruLayerCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
                 return
 
             span_name = f"llamaindex.{span_type}"
+            latency_ms = int(elapsed * 1000)
             with trace.span(span_name, span_type=span_type) as span:
                 span.set_input(input_text)
                 span.set_output(output_text)
-                span._data.latency_ms = int(elapsed * 1000)
+            # Overwrite the auto-captured fields with the real wall-clock
+            # window; __enter__/__exit__ ran after on_event_end fired.
+            span._data.latency_ms = latency_ms
+            span._data.started_at = start_wall
+            span._data.ended_at = start_wall + timedelta(milliseconds=latency_ms)
 
         except Exception as exc:
             warnings.warn(
