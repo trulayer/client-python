@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -77,7 +78,12 @@ def _on_llm_start(
 ) -> None:
     model_name = _extract_model(serialized, kwargs)
     input_text = prompts[0] if prompts else ""
-    self._tl_starts[run_id] = (time.monotonic(), model_name, input_text)
+    self._tl_starts[run_id] = (
+        time.monotonic(),
+        datetime.now(tz=UTC),
+        model_name,
+        input_text,
+    )
 
 
 def _on_chat_model_start(
@@ -90,7 +96,12 @@ def _on_chat_model_start(
 ) -> None:
     model_name = _extract_model(serialized, kwargs)
     input_text = _extract_chat_input(messages)
-    self._tl_starts[run_id] = (time.monotonic(), model_name, input_text)
+    self._tl_starts[run_id] = (
+        time.monotonic(),
+        datetime.now(tz=UTC),
+        model_name,
+        input_text,
+    )
 
 
 def _on_llm_end(self: Any, response: Any, *, run_id: UUID, **kwargs: Any) -> None:
@@ -98,8 +109,8 @@ def _on_llm_end(self: Any, response: Any, *, run_id: UUID, **kwargs: Any) -> Non
     if entry is None:
         return
 
-    start_time, model_name, input_text = entry
-    elapsed = time.monotonic() - start_time
+    start_mono, start_wall, model_name, input_text = entry
+    elapsed = time.monotonic() - start_mono
 
     try:
         from trulayer.trace import current_trace  # noqa: PLC0415
@@ -134,13 +145,19 @@ def _on_llm_end(self: Any, response: Any, *, run_id: UUID, **kwargs: Any) -> Non
         except Exception:
             pass
 
+        latency_ms = int(elapsed * 1000)
         with trace.span("langchain.llm", span_type="llm") as span:
             span.set_input(input_text)
             span.set_output(output)
             if model_name:
                 span.set_model(model_name)
             span.set_tokens(prompt=prompt_tokens, completion=completion_tokens)
-            span._data.latency_ms = int(elapsed * 1000)
+        # Overwrite the auto-captured fields with the real wall-clock window;
+        # __enter__/__exit__ ran after on_llm_end fired and would otherwise
+        # collapse start/end/latency to the post-call moment.
+        span._data.latency_ms = latency_ms
+        span._data.started_at = start_wall
+        span._data.ended_at = start_wall + timedelta(milliseconds=latency_ms)
 
     except Exception as exc:
         warnings.warn(f"trulayer: failed to record LangChain span: {exc}", stacklevel=2)
