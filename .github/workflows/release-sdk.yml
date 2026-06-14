@@ -20,14 +20,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # GH_PROMOTE_TOKEN is a PAT with repo+workflow scopes that can bypass
           # branch protection rules on main (required for the version bump push).
           token: ${{ secrets.GH_PROMOTE_TOKEN }}
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -91,7 +91,7 @@ jobs:
           upload-signing-artifacts: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version }}
           files: |
